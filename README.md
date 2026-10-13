@@ -282,14 +282,299 @@ gcloud compute addresses list   # empty
 
 Answers to the TD2 questions: `results/td2_answers.md`.
 
+## TD3 - Distributed orchestration on several VMs
+
+Goal: run many independent tasks on several Compute Engine VMs at the same time, from one
+controller (our Mac), and collect one output file and one error file per task automatically.
+The rule of the TD is "one task = one remote execution": every task is launched on its own,
+and several tasks of the same VM run at the same time. TD3 is about correct execution, not
+about performance. The same scripts will execute the allocation produced by our scheduler in
+TD4 and TD5.
+
+### Infrastructure
+
+Three VMs in the same project, zone and image (Ubuntu 24.04 LTS x86-64, 10 GB `pd-balanced`
+boot disk deleted with the VM, labels `course=cloud-optimization,td=td3`). The machine types are
+different on purpose, so that the scheduler of TD4/TD5 has a real choice to make.
+
+| VM | Machine type | vCPUs | RAM | On-demand price (europe-west1) |
+|---|---|---|---|---|
+| `cloudopt-vm1` | `e2-standard-2` | 2 | 8 GB | 0.0737 USD/h |
+| `cloudopt-vm2` | `e2-highcpu-4` | 4 | 4 GB | 0.1088 USD/h |
+| `cloudopt-vm3` | `e2-highmem-2` | 2 | 16 GB | 0.0994 USD/h |
+
+Total: 8 vCPUs, about 0.30 USD/h with the external IPs and disks. This needs a `CPUS` quota of
+at least 8 in `europe-west1`; `vm_create.sh` prints the quota before creating anything.
+The description of each VM, as seen from inside (lscpu, free), is saved in
+`data/machine_td3_<vm>.txt` by `deploy_all.sh`.
+
+### Architecture
+
+```
+ data/tasks.csv + data/machines.csv          (TD4: measurements too)
+              |
+   manual choice (TD3) / SCHEDULER (TD4-5)
+              |
+              v
+ data/allocation_manual.csv  ------>  validate_allocation.sh
+              |
+              v
+         run_all.sh  (on the Mac)
+   one "run_task.sh ... &" per row, then one "wait"
+      |              |              |
+ gcloud compute ssh --command (one SSH connection per task)
+      v              v              v
+  cloudopt-vm1   cloudopt-vm2   cloudopt-vm3
+  remote_exec.sh: /usr/bin/time ./bin/<workload> --size N
+      |              |              |
+ stdout/stderr come back through SSH, straight into local files
+      +--------------+--------------+
+              v
+ results/runs/<run_id>/  T1.out T1.err T1.status ... results.csv
+```
+
+| Script | Runs on | Role |
+|---|---|---|
+| `scripts/build_linux.sh` | Mac | cross-compile the 4 workloads for Linux x86-64 (`GOOS=linux GOARCH=amd64 CGO_ENABLED=0`) |
+| `scripts/vm_create.sh` | Mac | create the VMs of `data/machines.csv` in parallel, check the quota, skip existing VMs |
+| `scripts/deploy_all.sh` | Mac | copy `bin/` and `remote_exec.sh` to every VM in parallel, install GNU `time`, compare SHA-256 checksums, run a smoke test |
+| `scripts/remote_exec.sh` | VM | run one workload under `/usr/bin/time`, print markers with timestamps, exit code, runtime and RSS on stderr |
+| `scripts/run_task.sh` | Mac | run one task on one VM (TD interface: `TASK_ID WORKLOAD SIZE VM ZONE`), retry if the VM did not answer, write `.out`, `.err`, `.status` |
+| `scripts/validate_allocation.sh` | Mac | check an allocation before launching anything |
+| `scripts/run_all.sh` | Mac | launch every row in the background, one `wait`, build `results.csv` |
+| `scripts/check_results.sh` | Mac | the checks of Part 10, plus how many tasks really overlapped on each VM |
+| `scripts/cleanup_gcp.sh` | Mac | list everything billable; `--delete` deletes our labelled VMs |
+| `scripts/td3_pipeline.sh` | Mac | the whole TD in one command: create, deploy, run both allocations, check, delete |
+| `scripts/lib.sh` | Mac | shared settings and helpers (sourced, not executed) |
+
+Why Bash and not Python or Go: the TD asks for `&` and `wait` and no synchronisation code, and
+everything the orchestrator does is starting `gcloud` processes and moving files, which is what a
+shell does best. Each script is short enough to be explained in the oral exam. The scheduler of
+TD4/TD5 will be written in Go (the project requires a compiled language for the main
+implementation); it only has to write an allocation file, so the two parts stay independent.
+The scripts are written for bash 3.2, the default `/bin/bash` of macOS (no associative arrays,
+no `mapfile`, no `wait -n`, no `timeout`, no `sed -i`).
+
+### File formats (stable for TD4 and TD5)
+
+All files are CSV with a header, comma separated, no quotes, one row per item.
+
+`data/machines.csv`: the infrastructure, one row per VM.
+```
+vm,zone,machine_type,vcpus,memory_gb,usd_per_hour
+cloudopt-vm1,europe-west1-b,e2-standard-2,2,8,0.0737
+```
+
+`data/tasks.csv`: the tasks to place (input of the scheduler).
+```
+task_id,workload,size
+T1,cpu_task,8000000
+```
+
+`data/allocation_manual.csv` (and later `allocation.csv` written by the scheduler): the tasks
+plus the VM chosen for each one. The first four columns are required, in this order; extra
+columns are allowed and ignored by the orchestrator (for example a predicted runtime).
+```
+task_id,workload,size,vm
+T1,cpu_task,8000000,cloudopt-vm1
+```
+Rules checked by `validate_allocation.sh`: unique `task_id` (letters, digits, `.`, `_`, `-`),
+known workload with a binary in `bin/`, positive integer size, VM present in `machines.csv`, no
+empty value. With `TASKS=data/tasks.csv` it also checks that the allocation contains exactly the
+tasks of `tasks.csv`. It warns (without failing) when a VM gets more tasks than vCPUs, or when
+the `memory_task` sizes of one VM add up to more than 85 % of its memory.
+`run_all.sh` then checks with `gcloud` that each VM exists, is in the right zone and is RUNNING.
+
+`results/runs/<run_id>/results.csv`: one row per task, in the order of the allocation.
+
+| Column | Meaning |
+|---|---|
+| `run_id` | name of the run: UTC date + allocation name |
+| `mode` | `concurrent` (TD3) or `queue` |
+| `task_id`, `workload`, `size`, `vm` | copied from the allocation |
+| `zone`, `machine_type` | copied from `machines.csv` |
+| `host` | `hostname -s` reported by the VM itself (proves where the task ran) |
+| `status` | `OK`, `FAILED`, `TIMEOUT`, `LOST`, `SSH_ERROR`, `REJECTED`, `NOT_RUN` |
+| `exit_code` | exit code of the workload (124 = timeout), or of `gcloud` if the task never ran |
+| `attempts` | number of SSH attempts (more than 1 only if the VM did not answer) |
+| `submit_ts` | Mac clock, epoch seconds, when `run_task.sh` started |
+| `start_ts`, `end_ts` | VM clock, epoch seconds with ms, around the workload |
+| `runtime_s`, `max_rss_kb` | GNU time `%e` and `%M`, exactly as in `benchmark.sh` |
+| `wall_s` | time seen by the Mac for the task, SSH included |
+
+Compatibility with `benchmark.sh`: `runtime_s` and `max_rss_kb` are measured the same way, so a
+`results.csv` converts to the `workload,size,run,runtime_s,max_rss_kb` format with:
+```bash
+awk -F, 'NR == 1 { print "workload,size,run,runtime_s,max_rss_kb"; next }
+         $10 == "OK" { k = $4 "," $5; print k "," ++n[k] "," $16 "," $17 }' results.csv
+```
+
+Next to `results.csv`, each run directory keeps `T<i>.out` (the JSON printed by the workload),
+`T<i>.err` (stderr of the workload and any SSH error), `T<i>.status` (the raw status line),
+copies of `allocation.csv` and `machines.csv`, and `run_all.log`. A new run never overwrites an
+old one.
+
+### Error handling
+
+| Problem | What happens |
+|---|---|
+| Invalid allocation | `run_all.sh` stops before launching anything and prints every bad line |
+| VM missing, stopped or in another zone | `run_all.sh` stops before launching anything |
+| VM does not answer (SSH) | `run_task.sh` retries up to 3 times, 10 s apart. After that: `SSH_ERROR`. Retrying is safe because the task never started |
+| Connection lost after the task started | `LOST`, never retried: a task must not run twice |
+| Workload exits with an error | `FAILED`, its stderr is in the `.err` file |
+| Workload too long (`TASK_TIMEOUT=<s>`) | stopped on the VM by `timeout`, status `TIMEOUT` |
+| Binary missing on the VM | `REJECTED` by `remote_exec.sh`, not retried |
+| Ctrl-C | local processes stopped; the message gives the command to stop the remote workloads |
+
+`run_task.sh` knows whether a task started thanks to the `@@ORCH START` line printed by
+`remote_exec.sh` just before the workload. `run_all.sh` returns only after every task has
+finished, prints a summary and exits with 1 if any task is not `OK`. Failed tasks are always
+listed, never ignored.
+
+### Step by step
+
+Everything runs on the Mac, from `~/cloud-optimization`. No `gcloud` command runs on a VM.
+
+```bash
+# 0. Settings and checks (free)
+source scripts/gcp_env.sh
+gcloud config set project "$PROJECT_ID"
+./scripts/cleanup_gcp.sh                 # nothing should exist yet
+./tests/run_tests.sh                     # optional, needs Linux x86-64 (see Local tests)
+
+# 1. Binaries for the VMs (optional: bin/ already holds Linux x86-64 builds)
+./scripts/build_linux.sh                 # needs Go on the Mac: brew install go
+
+# 2. Create the 3 VMs, then deploy the same binaries everywhere
+./scripts/vm_create.sh
+gcloud compute instances list
+./scripts/deploy_all.sh
+gcloud compute ssh cloudopt-vm1 --zone="$ZONE" --command="ls -lh ~/cloud-optimization/bin"
+
+# 3. One task on one VM (Parts 4 and 5)
+OUT_DIR=results/manual ./scripts/run_task.sh T1 cpu_task 8000000 cloudopt-vm1 "$ZONE"
+cat results/manual/T1.out results/manual/T1.err results/manual/T1.status
+
+# 4. All tasks in parallel (Parts 6 to 10)
+./scripts/run_all.sh data/allocation_manual.csv
+# in a second terminal, while it runs:
+gcloud compute ssh cloudopt-vm1 --zone="$ZONE" --command="ps aux | grep -E 'cpu_task|memory_task|matrix_task' | grep -v grep"
+./scripts/check_results.sh results/runs/<run_id>
+
+# 5. A different allocation, same scripts (Part 11)
+TASKS=data/tasks.csv ./scripts/run_all.sh data/allocation_manual_b.csv
+./scripts/check_results.sh results/runs/<run_id>
+
+# 6. Delete the VMs and check that nothing is left
+./scripts/cleanup_gcp.sh --delete
+./scripts/cleanup_gcp.sh                 # must print "nothing billable left"
+```
+
+Steps 2 to 6 in one command (the VMs are deleted at the end, even after an error):
+`./scripts/td3_pipeline.sh` (or `KEEP_VMS=1 ./scripts/td3_pipeline.sh` to keep them).
+
+### Manual allocations
+
+Same 9 tasks (the TD1 reference sizes, `data/tasks.csv`), only the `vm` column changes:
+
+| Task | Workload | Size | Allocation A (`allocation_manual.csv`) | Allocation B (`allocation_manual_b.csv`) |
+|---|---|---|---|---|
+| T1 | `cpu_task` | 8 000 000 | vm1 | vm1 |
+| T2 | `cpu_task` | 16 000 000 | vm2 | vm1 |
+| T3 | `cpu_task` | 32 000 000 | vm2 | vm2 |
+| T4 | `memory_task` | 512 | vm1 | vm1 |
+| T5 | `memory_task` | 1024 | vm3 | vm1 |
+| T6 | `memory_task` | 2048 | vm3 | vm1 |
+| T7 | `matrix_task` | 1000 | vm1 | vm1 |
+| T8 | `matrix_task` | 1500 | vm2 | vm2 |
+| T9 | `matrix_task` | 2000 | vm3 | vm3 |
+
+A spreads the tasks (3 per VM). B puts 6 tasks on `cloudopt-vm1` (2 vCPUs, 3.5 GB of
+`memory_task` at the same time, which still fits in 8 GB). The two memory-heavy tasks are kept
+off `cloudopt-vm2` (4 GB): two `memory_task --size 2048` together would risk the OOM killer
+there.
+
+### Local tests (no GCP, no cost)
+
+`./tests/run_tests.sh` replaces `gcloud` by `tests/mock/gcloud`: each "VM" is a local folder,
+and `gcloud compute ssh` runs the command locally with the real binaries. 67 checks cover
+validation errors, creation and deployment, one task, a full run, a run with an unreachable VM,
+a VM that fails once, a connection cut during a task (`LOST`, not relaunched), a timeout, a
+missing binary, the queue mode, interruption, cleanup, and a scan for bash 4 or GNU-only
+constructs. They need Linux x86-64 because the workloads really run; on the Mac, check at least
+`bash -n scripts/*.sh` and `./scripts/validate_allocation.sh data/allocation_manual.csv`.
+
+### Costs and cleanup
+
+| Item | Price | For our 3 VMs |
+|---|---|---|
+| VMs (on demand, europe-west1) | see table above | 0.28 USD/h |
+| External IPv4 in use | 0.005 USD/h per VM | 0.015 USD/h |
+| Boot disks, 3 x 10 GB `pd-balanced` | 0.10 USD per GB-month | about 0.004 USD/h |
+| Network egress | results are a few kB | negligible |
+
+About 0.30 USD/h while the VMs exist (7 USD per day, about 220 USD per month if forgotten).
+A stopped VM still pays for its disk and a static IP; snapshots and unattached disks are billed
+until deleted. Our VMs use ephemeral IPs and auto-delete boot disks, and we create no snapshot.
+`cleanup_gcp.sh` lists instances, disks (including disks attached to no VM), static addresses,
+snapshots, custom images and machine images, and exits with code 2 if anything is left.
+Deleting the VMs never loses results: they are written on the Mac during the run.
+
+### Limitations, and what changes in TD4/TD5
+
+- In concurrent mode the tasks of a VM share its vCPUs, so `runtime_s` depends on the other tasks.
+  These runtimes are not benchmark data. To measure tasks alone, use `MODE=queue` (one queue per
+  VM, tasks one after the other). It is not used in TD3, where the TD forbids per-VM queues.
+- One SSH connection per task costs about 1-3 s of `gcloud` start-up on the Mac and one process
+  per task. That is fine for tens of tasks, not for thousands (sshd also limits parallel
+  connection attempts; failed attempts are retried safely).
+- `LOST` tasks may still be running on the VM; their result is unknown.
+- Tasks are not pinned to cores and memory is not reserved: the Linux scheduler shares the VM.
+
+### Results
+
+Run on 13 October 2026, from the Mac. The three VMs existed for about ten minutes (about
+0.05 USD).
+
+| | Allocation A | Allocation B |
+|---|---|---|
+| Run folder | `results/runs/20261013T135553Z-allocation_manual/` | `results/runs/20261013T140006Z-allocation_manual_b/` |
+| Tasks OK | 9 / 9, all with 1 attempt, empty `.err` files | 9 / 9, all with 1 attempt, empty `.err` files |
+| `check_results.sh` | all checks passed | all checks passed |
+| Tasks per VM (most running at once) | vm1 3 (3), vm2 3 (3), vm3 3 (3) | vm1 6 (6), vm2 2 (2), vm3 1 (1) |
+
+- **Hosts.** The `host` column equals the `vm` column for all 18 executions.
+- **Deployment.** The checksums were identical on the three VMs, and all smoke tests passed.
+  On every new VM, the first two SSH attempts failed (sshd not started, then key not yet
+  installed), and `deploy_all.sh` waited and retried.
+- **CPU.** The three VMs all got an Intel Xeon @ 2.20 GHz (Broadwell, model 79), the same as in
+  TD2. They differ by vCPUs and memory, not by core speed.
+- **Sharing.** `cpu_task 8000000` on vm1 took 7.58 s alone (Part 5 test, `results/manual/`),
+  9.28 s with 3 tasks on 2 vCPUs (A) and 17.11 s with 6 tasks (B). This shows CPU sharing; it
+  is not a comparison of the allocations.
+- **Cleanup.** No instance, disk, address, snapshot or image was left.
+
+### Problems met
+
+| Problem | Cause | Fix |
+|---|---|---|
+| `zsh: parse error near '\n'` on `check_results.sh results/runs/<run_id>` | `<run_id>` is a placeholder; zsh reads `<` and `>` as redirections | type the real folder name (Tab completes it) |
+| First SSH attempts fail on new VMs | sshd not started yet, then key not yet installed on the VM | handled: `deploy_all.sh` retries every 10 s |
+| `cleanup_gcp.sh` said "disks not attached: FOUND" with no disk | gcloud warns on stderr when no disk exists, and the script read stderr as data | the scripts now read only stdout as data (`gcloud_out` in `lib.sh`), with a test |
+
+Answers to the TD3 questions: `results/td3_answers.md`.
+
 ## Repository Structure
 
 ```
 cloud-optimization/
 +-- workloads/   Go sources provided by the instructor
-+-- bin/         compiled executables (not versioned)
-+-- data/        machine descriptions and raw measurements
-|                (benchmark_local.csv, benchmark_cloud_vm1.csv, machine_*.txt)
-+-- results/     analysis and answers to the TD questions
-+-- scripts/     benchmark.sh, gcp_env.sh
++-- bin/         compiled executables, Linux x86-64 (copied to the VMs)
++-- data/        machine descriptions, raw measurements, TD3 input files
+|                (benchmark_*.csv, machine_*.txt, machines.csv, tasks.csv,
+|                 allocation_manual.csv, allocation_manual_b.csv)
++-- results/     answers to the TD questions, TD3 runs (results/runs/<run_id>/)
++-- scripts/     benchmark.sh, gcp_env.sh, TD3 orchestration scripts
++-- tests/       local tests of the TD3 scripts with a fake gcloud
 ```

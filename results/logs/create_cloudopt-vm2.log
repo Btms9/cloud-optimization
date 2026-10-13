@@ -1,0 +1,3 @@
+Created [https://www.googleapis.com/compute/v1/projects/cloud-opti-93260/zones/europe-west1-b/instances/cloudopt-vm2].
+NAME          ZONE            MACHINE_TYPE  PREEMPTIBLE  INTERNAL_IP  EXTERNAL_IP    STATUS
+cloudopt-vm2  europe-west1-b  e2-highcpu-4               10.132.0.3   34.77.247.193  RUNNING

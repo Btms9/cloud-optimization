@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# Fake "gcloud" used by tests/run_tests.sh to test the TD3 scripts without GCP.
+# Put tests/mock first in PATH. Nothing here is used with real VMs.
+#
+# Each fake VM is a directory $MOCK_ROOT/vms/<name>/ with a "home" folder.
+# "compute ssh" runs the command locally with HOME set to that folder and a
+# fake "hostname" that prints the VM name, so remote_exec.sh runs for real
+# with the real binaries of bin/ (the test machine must be Linux x86-64).
+#
+# Failure injection (space-separated VM names):
+#   MOCK_UNREACHABLE   ssh always fails with exit 255 (VM not answering)
+#   MOCK_FLAKY         the first MOCK_FLAKY_FAILS ssh calls fail (default 1)
+#   MOCK_DROP          the connection is cut 1 s after the command started
+#   MOCK_CREATE_FAIL   "instances create" fails (quota error)
+# Every call is appended to $MOCK_ROOT/calls.log.
+
+set -u
+: "${MOCK_ROOT:?MOCK_ROOT must be set}"
+mkdir -p "$MOCK_ROOT/vms"
+echo "$*" >> "$MOCK_ROOT/calls.log"
+
+in_list() { case " $2 " in *" $1 "*) return 0 ;; esac; return 1; }
+
+POS=()
+ZONE="" COMMAND="" FORMAT="" FILTER="" MTYPE=""
+for a in "$@"; do
+    case $a in
+        --zone=*) ZONE=${a#--zone=} ;;
+        --command=*) COMMAND=${a#--command=} ;;
+        --format=*) FORMAT=${a#--format=} ;;
+        --filter=*) FILTER=${a#--filter=} ;;
+        --machine-type=*) MTYPE=${a#--machine-type=} ;;
+        --*) ;;
+        *) POS+=("$a") ;;
+    esac
+done
+
+vm_dir() { echo "$MOCK_ROOT/vms/$1"; }
+vm_exists() { [ -f "$(vm_dir "$1")/meta" ]; }
+not_found() {
+    echo "ERROR: (gcloud.compute.$1) Could not fetch resource:" >&2
+    echo " - The resource 'projects/mock/zones/$ZONE/instances/$2' was not found" >&2
+    exit 1
+}
+
+# Print the instances with the fields of --format="value(...)" (tab separated)
+list_instances() {
+    local fields d name zone type status out f
+    fields=$(echo "$FORMAT" | sed 's/^value(//; s/)$//' | tr ',' ' ')
+    for d in "$MOCK_ROOT"/vms/*/; do
+        [ -f "$d/meta" ] || continue
+        read -r name zone type status < "$d/meta"
+        out=""
+        for f in $fields; do
+            case $f in
+                name) v=$name ;; zone.basename\(\)) v=$zone ;; status) v=$status ;;
+                machineType.basename\(\)) v=$type ;; labels.td) v=td3 ;; *) v="?" ;;
+            esac
+            out="$out${out:+	}$v"
+        done
+        echo "$out"
+    done
+}
+
+case "${POS[0]:-} ${POS[1]:-} ${POS[2]:-}" in
+"compute instances create")
+    name=${POS[3]}
+    in_list "$name" "${MOCK_CREATE_FAIL:-}" && { echo "ERROR: (gcloud.compute.instances.create) Quota 'CPUS' exceeded. Limit: 8.0 in region europe-west1." >&2; exit 1; }
+    vm_exists "$name" && { echo "ERROR: (gcloud.compute.instances.create) The resource '$name' already exists" >&2; exit 1; }
+    d=$(vm_dir "$name"); mkdir -p "$d/home" "$d/fakebin"
+    printf '#!/bin/sh\necho %s\n' "$name" > "$d/fakebin/hostname"; chmod +x "$d/fakebin/hostname"
+    echo "$name $ZONE $MTYPE RUNNING" > "$d/meta"
+    sleep 0.2
+    echo "Created [https://www.googleapis.com/compute/v1/projects/mock/zones/$ZONE/instances/$name]."
+    ;;
+"compute instances list")
+    list_instances ;;
+"compute instances delete")
+    for name in "${POS[@]:3}"; do
+        vm_exists "$name" || not_found instances.delete "$name"
+        rm -rf "$(vm_dir "$name")"
+        echo "Deleted [$name]."
+    done ;;
+"compute disks list")
+    case $FILTER in
+        *users*)
+            # Like the real gcloud: a warning on stderr when no disk has a "users" key
+            ls "$MOCK_ROOT"/vms/*/meta > /dev/null 2>&1 ||
+                echo "WARNING: The following filter keys were not present in any resource : users" >&2
+            [ -f "$MOCK_ROOT/orphan_disks" ] && cat "$MOCK_ROOT/orphan_disks" ;;
+        *) for d in "$MOCK_ROOT"/vms/*/; do
+               [ -f "$d/meta" ] && awk '{ print $1 "\t" $2 "\t10\tpd-balanced" }' "$d/meta"
+           done ;;
+    esac
+    exit 0 ;;
+"compute addresses list"|"compute snapshots list"|"compute images list"|"compute machine-images list")
+    f="$MOCK_ROOT/${POS[1]}"; [ -f "$f" ] && cat "$f"; exit 0 ;;
+"compute regions describe")
+    echo "CPUS,${MOCK_CPU_QUOTA:-24}.0,0.0"; echo "DISKS_TOTAL_GB,4096.0,0.0" ;;
+"compute ssh "*)
+    name=${POS[2]}
+    vm_exists "$name" || not_found ssh "$name"
+    read -r _ vzone _ status < "$(vm_dir "$name")/meta"
+    [ "$vzone" = "$ZONE" ] || not_found ssh "$name"
+    # Like ssh, read stdin until EOF (this is why callers use < /dev/null)
+    [ -t 0 ] || cat > /dev/null
+    if in_list "$name" "${MOCK_UNREACHABLE:-}"; then
+        echo "ssh: connect to host 34.76.0.1 port 22: Operation timed out" >&2; exit 255
+    fi
+    if in_list "$name" "${MOCK_FLAKY:-}"; then
+        c=$(cat "$(vm_dir "$name")/flaky" 2>/dev/null || echo 0)
+        echo $((c + 1)) > "$(vm_dir "$name")/flaky"
+        if [ "$c" -lt "${MOCK_FLAKY_FAILS:-1}" ]; then
+            echo "kex_exchange_identification: read: Connection reset by peer" >&2; exit 255
+        fi
+    fi
+    home="$(vm_dir "$name")/home"
+    if in_list "$name" "${MOCK_DROP:-}"; then
+        # The connection is cut after 1 s. Like with real ssh (no terminal),
+        # the remote command keeps running; the controller only received
+        # what was printed during that first second.
+        part="$(vm_dir "$name")/dropped.$$"
+        (cd "$home" && HOME="$home" PATH="$(vm_dir "$name")/fakebin:$PATH" bash -c "$COMMAND") \
+            < /dev/null > "$part.out" 2> "$part.err" &
+        sleep 1
+        cat "$part.out"; cat "$part.err" >&2
+        echo "Connection to 34.76.0.1 closed by remote host." >&2
+        exit 255
+    fi
+    cd "$home" && HOME="$home" PATH="$(vm_dir "$name")/fakebin:$PATH" bash -c "$COMMAND" < /dev/null
+    exit $? ;;
+"compute scp "*)
+    target=${POS[${#POS[@]}-1]}
+    name=${target%%:*}
+    dest=${target#*:}
+    vm_exists "$name" || not_found scp "$name"
+    in_list "$name" "${MOCK_UNREACHABLE:-}" && { echo "ssh: connect to host 34.76.0.1 port 22: Operation timed out" >&2; exit 1; }
+    home="$(vm_dir "$name")/home"
+    dest=${dest#\~/}
+    case $dest in */) [ -d "$home/$dest" ] || { echo "scp: $dest: No such file or directory" >&2; exit 1; } ;; esac
+    last=$((${#POS[@]} - 1))
+    for ((i = 2; i < last; i++)); do cp -p "${POS[$i]}" "$home/$dest" || exit 1; done ;;
+*)
+    echo "mock gcloud: unsupported command: $*" >&2; exit 3 ;;
+esac

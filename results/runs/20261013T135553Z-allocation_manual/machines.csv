@@ -1,0 +1,4 @@
+vm,zone,machine_type,vcpus,memory_gb,usd_per_hour
+cloudopt-vm1,europe-west1-b,e2-standard-2,2,8,0.0737
+cloudopt-vm2,europe-west1-b,e2-highcpu-4,4,4,0.1088
+cloudopt-vm3,europe-west1-b,e2-highmem-2,2,16,0.0994

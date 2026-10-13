@@ -1,0 +1,24 @@
+[15:55:54] run 20261013T135553Z-allocation_manual: 9 tasks from data/allocation_manual.csv, mode=concurrent, project=cloud-opti-93260
+[15:55:54] results in results/runs/20261013T135553Z-allocation_manual/
+[15:55:54] launch T1: cpu_task --size 8000000 on cloudopt-vm1
+[15:55:54] launch T2: cpu_task --size 16000000 on cloudopt-vm2
+[15:55:54] launch T3: cpu_task --size 32000000 on cloudopt-vm2
+[15:55:54] launch T4: memory_task --size 512 on cloudopt-vm1
+[15:55:54] launch T5: memory_task --size 1024 on cloudopt-vm3
+[15:55:54] launch T6: memory_task --size 2048 on cloudopt-vm3
+[15:55:54] launch T7: matrix_task --size 1000 on cloudopt-vm1
+[15:55:54] launch T8: matrix_task --size 1500 on cloudopt-vm2
+[15:55:54] launch T9: matrix_task --size 2000 on cloudopt-vm3
+[15:55:54] all tasks launched, waiting for them to finish
+[T4] OK        cloudopt-vm1   memory_task  runtime=1.76s max_rss=527412kB attempts=1
+[T7] OK        cloudopt-vm1   matrix_task  runtime=3.60s max_rss=26184kB attempts=1
+[T5] OK        cloudopt-vm3   memory_task  runtime=3.86s max_rss=1052368kB attempts=1
+[T8] OK        cloudopt-vm2   matrix_task  runtime=6.19s max_rss=55464kB attempts=1
+[T6] OK        cloudopt-vm3   memory_task  runtime=6.28s max_rss=2102224kB attempts=1
+[T1] OK        cloudopt-vm1   cpu_task     runtime=9.28s max_rss=2248kB attempts=1
+[T9] OK        cloudopt-vm3   matrix_task  runtime=16.41s max_rss=96456kB attempts=1
+[T2] OK        cloudopt-vm2   cpu_task     runtime=20.44s max_rss=2248kB attempts=1
+[T3] OK        cloudopt-vm2   cpu_task     runtime=52.33s max_rss=2248kB attempts=1
+[15:56:48] All 9 tasks have finished: 9 OK, 0 not OK
+    OK         9
+[15:56:48] results: results/runs/20261013T135553Z-allocation_manual/results.csv
