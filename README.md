@@ -565,6 +565,109 @@ Run on 13 October 2026, from the Mac. The three VMs existed for about ten minute
 
 Answers to the TD3 questions: `results/td3_answers.md`.
 
+## TD4 - Round-Robin scheduler (automatic allocation)
+
+Goal: a program writes the allocation instead of a person. The scheduler decides where each
+task runs; the TD3 orchestrator, unchanged, runs it there. Round-Robin is the reference
+baseline required by the course, **not** our final optimization method.
+
+```
+data/tasks.csv + data/machines.csv
+              |
+  bin/round_robin_scheduler   (Go, on the Mac, only writes a CSV)
+              |
+  data/allocation_rr.csv      (task_id,workload,size,vm - TD3 format)
+              |
+  scripts/run_all.sh          (TD3, unchanged) -> VMs -> results/runs/<run_id>/
+```
+
+### Scheduler
+
+`scheduler/round_robin.go`, Go standard library only, adapted from the instructor example
+(same functions: `readCSV`, `schedule`, `writeAllocation`, `run`, `main`). The rule is one
+line in `schedule`: `vm := vmNames[i%len(vmNames)]`, where `i` is the position of the task in
+`tasks.csv`. Differences with the instructor version:
+
+- columns are found by name and extra columns are ignored, so our 6-column `machines.csv`
+  (needed by the TD3 scripts and later by our own scheduler) works; a file with only `vm`
+  works too;
+- a size that is not a positive integer, an empty task list, a duplicated task or VM, or a
+  missing column is an error, and no file is written;
+- it prints the number of tasks given to each VM.
+
+Nothing is hard-coded: the same binary works with any number of tasks and VMs.
+
+### Commands (on the Mac)
+
+```bash
+go version                          # if missing: brew install go
+go build -o bin/round_robin_scheduler scheduler/round_robin.go
+go test -v scheduler/round_robin.go scheduler/round_robin_test.go
+
+./bin/round_robin_scheduler data/tasks.csv data/machines.csv data/allocation_rr.csv
+cat data/allocation_rr.csv
+TASKS=data/tasks.csv ./scripts/validate_allocation.sh data/allocation_rr.csv
+
+./scripts/vm_create.sh && ./scripts/deploy_all.sh
+./scripts/run_all.sh data/allocation_rr.csv
+./scripts/check_results.sh results/runs/$(ls -t results/runs | head -1)
+./scripts/cleanup_gcp.sh --delete && ./scripts/cleanup_gcp.sh
+```
+
+`bin/round_robin_scheduler` is built for the Mac, so it is in `.gitignore`: each team member
+builds it. It is never copied to the VMs (`deploy_all.sh` only copies the four workloads).
+
+### Tests
+
+`scheduler/round_robin_test.go` covers the TD cases A to E (6 tasks/3 VMs, 5/2, 2/3, 0 VMs,
+duplicate ID) plus 10 tasks/3 VMs, determinism, reversed order, our 6-column `machines.csv`,
+invalid inputs and Windows line endings. `tests/run_tests.sh` (section 11) also checks that
+`data/allocation_rr.csv` is exactly the scheduler output and runs scheduler -> `run_all.sh` ->
+`check_results.sh` with the fake gcloud. 71 checks pass.
+
+### Round-Robin allocation of our nine tasks
+
+| VM | Tasks | vCPUs / RAM |
+|---|---|---|
+| `cloudopt-vm1` | T1 cpu 8000000, T4 memory 512, T7 matrix 1000 | 2 / 8 GB |
+| `cloudopt-vm2` | T2 cpu 16000000, T5 memory 1024, T8 matrix 1500 | 4 / 4 GB |
+| `cloudopt-vm3` | T3 cpu 32000000, T6 memory 2048, T9 matrix 2000 | 2 / 16 GB |
+
+The count is balanced (3, 3, 3) but the work is not: `tasks.csv` is sorted by workload then
+size, so every third task, which is the largest of its workload, goes to `cloudopt-vm3`, a
+2-vCPU VM, while the only 4-vCPU VM gets the medium tasks. Changing the order of `tasks.csv`
+changes the allocation. This is the limitation our own scheduler must fix: it needs runtime
+estimates per workload, size and machine type, plus the vCPUs and memory of each VM.
+
+### Results
+
+Run on 15 October 2026: `results/runs/20261015T104612Z-allocation_rr/`. 9 / 9 tasks OK, one
+attempt each, empty `.err` files, `check_results.sh`: all checks passed, 3 tasks running at the
+same time on each VM. The run took 16 s.
+
+| VM | Round-Robin tasks | Busy for |
+|---|---|---|
+| `cloudopt-vm1` (2 vCPUs) | cpu 8000000, memory 512, matrix 1000 | 1.9 s |
+| `cloudopt-vm2` (4 vCPUs) | cpu 16000000, memory 1024, matrix 1500 | 4.3 s |
+| `cloudopt-vm3` (2 vCPUs) | cpu 32000000, memory 2048, matrix 2000 | 13.3 s |
+
+Same number of tasks, seven times more work on `cloudopt-vm3`: this is the limitation of
+Round-Robin, measured. The VMs were deleted right after the run (about nine minutes, about
+0.04 USD), and `cleanup_gcp.sh` reported "nothing billable left".
+
+**The CPU changed between TD3 and TD4.** Same machine types, zone and image, but the E2 VMs got
+Intel Xeon Broadwell on 13 October and AMD EPYC 7B12 on 15 October (`data/machine_td3_<vm>.txt`
+and `data/machine_td4_<vm>.txt`). `cpu_task 8000000` took 7.58 s alone in TD3 and 1.81 s with two
+other tasks in TD4. Runtimes must therefore be stored with the CPU platform, and a baseline and
+an optimized allocation must be compared in the same session.
+
+Since TD4, `vm_create.sh` and `deploy_all.sh` write their logs to `results/logs/<TAG>/` and the
+machine descriptions to `data/machine_<TAG>_<vm>.txt`. `TAG` is the UTC date by default
+(`TAG=td5 ./scripts/deploy_all.sh` to choose it), so a new session never overwrites an old one.
+The TD4 logs are in `results/logs/td4/`.
+
+Answers to the TD4 questions: `results/td4_answers.md`.
+
 ## Repository Structure
 
 ```
@@ -573,8 +676,10 @@ cloud-optimization/
 +-- bin/         compiled executables, Linux x86-64 (copied to the VMs)
 +-- data/        machine descriptions, raw measurements, TD3 input files
 |                (benchmark_*.csv, machine_*.txt, machines.csv, tasks.csv,
-|                 allocation_manual.csv, allocation_manual_b.csv)
+|                 allocation_manual.csv, allocation_manual_b.csv,
+|                 allocation_rr.csv generated by the scheduler)
 +-- results/     answers to the TD questions, TD3 runs (results/runs/<run_id>/)
++-- scheduler/   TD4 Round-Robin scheduler (Go) and its tests
 +-- scripts/     benchmark.sh, gcp_env.sh, TD3 orchestration scripts
 +-- tests/       local tests of the TD3 scripts with a fake gcloud
 ```

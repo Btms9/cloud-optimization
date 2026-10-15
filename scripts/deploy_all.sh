@@ -10,8 +10,8 @@
 #   3. copy bin/* and scripts/remote_exec.sh with gcloud compute scp
 #   4. compare the SHA-256 of every file with the local copy
 #   5. run each workload once with a tiny size (smoke test)
-#   6. save a description of the VM in data/machine_td3_<vm>.txt (lscpu, free)
-# One log per VM in results/logs/deploy_<vm>.log. Exit code 1 if any VM failed.
+#   6. save a description of the VM in data/machine_<TAG>_<vm>.txt (lscpu, free)
+# One log per VM in results/logs/<TAG>/deploy_<vm>.log (TAG: see lib.sh). Exit code 1 if any VM failed.
 #
 # The binaries in bin/ must be Linux x86-64 executables. They are built on
 # the Mac with ./scripts/build_linux.sh (no Go needed on the VMs).
@@ -24,10 +24,10 @@ cd "$(dirname "$0")/.." || exit 1
 
 require_gcloud
 check_machines_file
-LOG_DIR=${LOG_DIR:-results/logs}
+LOG_DIR=${LOG_DIR:-results/logs/$TAG}
 SSH_WAIT_TRIES=${SSH_WAIT_TRIES:-12}       # x 10 s
 SSH_WAIT_DELAY=${SSH_WAIT_DELAY:-10}
-INFO_DIR=${INFO_DIR:-data}                 # where machine_td3_<vm>.txt goes
+INFO_DIR=${INFO_DIR:-data}                 # where machine_<TAG>_<vm>.txt goes
 mkdir -p "$LOG_DIR" "$INFO_DIR"
 
 # --- 0. Local checks: Linux x86-64 binaries, and one SSH key for gcloud ---
@@ -92,12 +92,12 @@ deploy_one() {
     gssh "$vm" "$zone" "for t in 'cpu_task 1000' 'memory_task 16' 'matrix_task 50' 'sort_task 1000'; do \
         bash $REMOTE_DIR/scripts/remote_exec.sh smoke \$t 2>/dev/null || { echo \"smoke test failed: \$t\"; exit 1; }; done" || return 1
 
-    echo "== 6. machine description -> $INFO_DIR/machine_td3_$vm.txt"
+    echo "== 6. machine description -> $INFO_DIR/machine_${TAG}_$vm.txt"
     gssh "$vm" "$zone" "echo '=== hostname ==='; hostname; echo '=== machine type ==='; \
         curl -s -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/machine-type 2>/dev/null | sed 's|.*/||'; echo; \
         echo '=== uname ==='; uname -a; echo '=== nproc ==='; nproc; echo '=== lscpu ==='; lscpu; \
-        echo '=== free -m ==='; free -m" > "$INFO_DIR/machine_td3_$vm.txt" || return 1
-    grep -m1 'Model name' "$INFO_DIR/machine_td3_$vm.txt"
+        echo '=== free -m ==='; free -m" > "$INFO_DIR/machine_${TAG}_$vm.txt" || return 1
+    grep -m1 'Model name' "$INFO_DIR/machine_${TAG}_$vm.txt"
     echo "== $vm ready"
 }
 

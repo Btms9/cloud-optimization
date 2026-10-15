@@ -40,7 +40,7 @@ setup() {
     export HOME="$T/home"
     mkdir -p "$HOME/.ssh" "$MOCK_ROOT"
     touch "$HOME/.ssh/google_compute_engine"
-    export LOG_DIR="$T/logs" INFO_DIR="$T/info"
+    export LOG_DIR="$T/logs" INFO_DIR="$T/info" TAG=test
     export SSH_RETRY_DELAY=0 SSH_WAIT_DELAY=0 SSH_WAIT_TRIES=2
 }
 create_and_deploy() {
@@ -90,7 +90,7 @@ check "deploy_all.sh deploys all VMs" ./scripts/deploy_all.sh
 for vm in cloudopt-vm1 cloudopt-vm2 cloudopt-vm3; do
     cmp -s bin/matrix_task "$MOCK_ROOT/vms/$vm/home/cloud-optimization/bin/matrix_task" &&
     [ -x "$MOCK_ROOT/vms/$vm/home/cloud-optimization/scripts/remote_exec.sh" ] &&
-    [ -s "$INFO_DIR/machine_td3_$vm.txt" ] && pass "$vm has the binaries and a machine description" || fail "$vm deploy"
+    [ -s "$INFO_DIR/machine_test_$vm.txt" ] && pass "$vm has the binaries and a machine description" || fail "$vm deploy"
 done
 grep -q 'cpu_task.*primes_found' "$LOG_DIR/deploy_cloudopt-vm1.log" && pass "smoke test output is in the deploy log" || fail "smoke log"
 setup
@@ -237,6 +237,26 @@ for f in scripts/*.sh tests/run_tests.sh tests/mock/gcloud; do
     [ -x "$f" ] || fail "$f is not executable"
 done
 pass "scripts are executable"
+
+echo "11. TD4 Round-Robin scheduler (Go) + the two-command workflow"
+if command -v go > /dev/null 2>&1; then
+    setup
+    GOCACHE=${GOCACHE:-$T/gocache} go test scheduler/round_robin.go scheduler/round_robin_test.go > "$T/gotest.txt" 2>&1 &&
+        pass "go test: cases A-E, order, format, invalid inputs" || fail "go test: $(tail -20 "$T/gotest.txt")"
+    GOCACHE=${GOCACHE:-$T/gocache} go build -o "$T/rr" scheduler/round_robin.go || fail "go build"
+    "$T/rr" data/tasks.csv data/machines.csv "$T/allocation_rr.csv" > /dev/null &&
+        cmp -s "$T/allocation_rr.csv" data/allocation_rr.csv &&
+        pass "data/allocation_rr.csv is exactly what the scheduler generates" || fail "allocation_rr.csv differs from the scheduler output"
+    TASKS=data/tasks.csv ./scripts/validate_allocation.sh "$T/allocation_rr.csv" > /dev/null 2>&1 &&
+        pass "the generated allocation passes validate_allocation.sh with TASKS" || fail "generated allocation invalid"
+    create_and_deploy
+    "$T/rr" "$FIX/tasks_small.csv" data/machines.csv "$T/alloc_rr_small.csv" > /dev/null &&
+    RUN_ID=rr OUT_DIR="$T/rr_run" ./scripts/run_all.sh "$T/alloc_rr_small.csv" > /dev/null 2>&1 &&
+    ./scripts/check_results.sh "$T/rr_run" > /dev/null 2>&1 &&
+        pass "scheduler -> run_all.sh -> check_results.sh works end to end" || fail "end-to-end with the scheduler"
+else
+    echo "  skip  (go not installed)"
+fi
 
 for d in $TMPS; do rm -rf "$d"; done
 export HOME=$ORIG_HOME

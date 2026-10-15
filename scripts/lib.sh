@@ -25,6 +25,11 @@ IMAGE_PROJECT=${IMAGE_PROJECT:-ubuntu-os-cloud}
 BOOT_DISK_SIZE=${BOOT_DISK_SIZE:-10GB}
 BOOT_DISK_TYPE=${BOOT_DISK_TYPE:-pd-balanced}
 LABELS=${LABELS:-course=cloud-optimization,td=td3}
+# Name of this working session (default: today's UTC date, or for example
+# TAG=td5). It names the log folder results/logs/<TAG>/ and the machine
+# descriptions data/machine_<TAG>_<vm>.txt, so that a new session never
+# overwrites the files of a previous one (the VMs may get another CPU).
+TAG=${TAG:-$(date -u +%Y%m%d)}
 
 # Options added to every "gcloud compute ssh" call:
 #  --quiet                         never ask a question (we run in the background)

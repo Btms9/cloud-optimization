@@ -1,0 +1,11 @@
+Checking results/runs/20261015T104612Z-allocation_rr
+  [ok]   1. all 9 tasks appear exactly once in results.csv
+  [ok]   2. every task that started ran on the VM of the allocation
+  [ok]   3. every task has its .out and .err files
+  [ok]   4. every OK task printed the JSON of its workload and size
+  [ok]   5. every task finished with status OK (exit code 0)
+Tasks per VM and largest number running at the same time:
+    cloudopt-vm1      3 tasks, up to 3 at the same time
+    cloudopt-vm2      3 tasks, up to 3 at the same time
+    cloudopt-vm3      3 tasks, up to 3 at the same time
+All checks passed.

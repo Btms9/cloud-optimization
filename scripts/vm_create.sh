@@ -18,7 +18,7 @@ cd "$(dirname "$0")/.." || exit 1
 
 require_gcloud
 check_machines_file
-LOG_DIR=${LOG_DIR:-results/logs}
+LOG_DIR=${LOG_DIR:-results/logs/$TAG}
 mkdir -p "$LOG_DIR"
 
 VMS=$(machine_names "$@")

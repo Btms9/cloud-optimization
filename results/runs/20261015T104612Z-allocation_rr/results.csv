@@ -1,0 +1,10 @@
+run_id,mode,task_id,workload,size,vm,zone,machine_type,host,status,exit_code,attempts,submit_ts,start_ts,end_ts,runtime_s,max_rss_kb,wall_s
+20261015T104612Z-allocation_rr,concurrent,T1,cpu_task,8000000,cloudopt-vm1,europe-west1-b,e2-standard-2,cloudopt-vm1,OK,0,1,1792061173.629,1792061175.479,1792061177.297,1.81,2376,3.850
+20261015T104612Z-allocation_rr,concurrent,T2,cpu_task,16000000,cloudopt-vm2,europe-west1-b,e2-highcpu-4,cloudopt-vm2,OK,0,1,1792061173.630,1792061175.617,1792061179.472,3.84,2248,6.015
+20261015T104612Z-allocation_rr,concurrent,T3,cpu_task,32000000,cloudopt-vm3,europe-west1-b,e2-highmem-2,cloudopt-vm3,OK,0,1,1792061173.638,1792061175.616,1792061187.660,12.03,2504,14.212
+20261015T104612Z-allocation_rr,concurrent,T4,memory_task,512,cloudopt-vm1,europe-west1-b,e2-standard-2,cloudopt-vm1,OK,0,1,1792061173.644,1792061175.468,1792061176.480,1.00,527568,3.046
+20261015T104612Z-allocation_rr,concurrent,T5,memory_task,1024,cloudopt-vm2,europe-west1-b,e2-highcpu-4,cloudopt-vm2,OK,0,1,1792061173.654,1792061175.617,1792061177.029,1.40,1052368,3.544
+20261015T104612Z-allocation_rr,concurrent,T6,memory_task,2048,cloudopt-vm3,europe-west1-b,e2-highmem-2,cloudopt-vm3,OK,0,1,1792061173.663,1792061175.618,1792061179.672,4.04,2102224,6.173
+20261015T104612Z-allocation_rr,concurrent,T7,matrix_task,1000,cloudopt-vm1,europe-west1-b,e2-standard-2,cloudopt-vm1,OK,0,1,1792061173.673,1792061175.477,1792061177.389,1.90,26312,3.901
+20261015T104612Z-allocation_rr,concurrent,T8,matrix_task,1500,cloudopt-vm2,europe-west1-b,e2-highcpu-4,cloudopt-vm2,OK,0,1,1792061173.681,1792061175.618,1792061179.895,4.27,55624,6.381
+20261015T104612Z-allocation_rr,concurrent,T9,matrix_task,2000,cloudopt-vm3,europe-west1-b,e2-highmem-2,cloudopt-vm3,OK,0,1,1792061173.694,1792061175.620,1792061188.958,13.33,96456,15.488

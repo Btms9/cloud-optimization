@@ -1,0 +1,30 @@
+== 1. wait for SSH on cloudopt-vm1
+ssh: connect to host 34.34.166.28 port 22: Connection refused
+
+Recommendation: To check for possible causes of SSH connectivity issues and get
+recommendations, rerun the ssh command with the --troubleshoot option.
+
+gcloud compute ssh cloudopt-vm1 --project=cloud-opti-93260 --zone=europe-west1-b --troubleshoot
+
+Or, to investigate an IAP tunneling issue:
+
+gcloud compute ssh cloudopt-vm1 --project=cloud-opti-93260 --zone=europe-west1-b --troubleshoot --tunnel-through-iap
+
+ERROR: (gcloud.compute.ssh) [/usr/bin/ssh] exited with return code [255].
+== 2. directories and GNU time
+time (GNU Time) UNKNOWN
+== 3. copy the files
+== 4. checksums
+cd670e3aea6a09b19872def93e597de4375826ef8b73cc676ebc8cd41a503e73  bin/cpu_task
+922057e92c2adfac377394379b4ddd6264f2ce64e750fd63ca47d8e0e156f1a2  bin/memory_task
+7b3930aba0c5dd7b292122e6ac12ec2be9472376fb22180a2ce02544b083d6d6  bin/matrix_task
+dbbfad0c0305fa8b88ff558de6f0604a97d324d577cac605234b5a678768d9db  bin/sort_task
+c301cc076cd0709a55e22fb32140f101215944422ae78ec1309e1a5e0266d766  scripts/remote_exec.sh
+== 5. smoke test (tiny sizes, through remote_exec.sh)
+{"task":"cpu_task","size":1000,"runtime_s":0.00001003,"primes_found":168}
+{"task":"memory_task","size_mb":16,"runtime_s":0.0202071,"checksum":18312268751678996480,"alloc_mb":16.059829711914062}
+{"task":"matrix_task","size":50,"runtime_s":0.000236901,"checksum":634.0637090235143}
+{"task":"sort_task","size":1000,"runtime_s":0.00005644,"checksum":1502498556}
+== 6. machine description -> data/machine_td3_cloudopt-vm1.txt
+Model name:                              AMD EPYC 7B12
+== cloudopt-vm1 ready
