@@ -228,7 +228,7 @@ echo "n" | ./scripts/cleanup_gcp.sh --delete > /dev/null 2>&1
 pass "--delete without --yes asks first (answered no)"
 
 echo "10. portability (macOS bash 3.2, BSD tools) of the controller scripts"
-CTRL="scripts/lib.sh scripts/run_task.sh scripts/run_all.sh scripts/validate_allocation.sh scripts/vm_create.sh scripts/deploy_all.sh scripts/check_results.sh scripts/cleanup_gcp.sh scripts/td3_pipeline.sh scripts/build_linux.sh"
+CTRL="scripts/summarize_run.sh scripts/lib.sh scripts/run_task.sh scripts/run_all.sh scripts/validate_allocation.sh scripts/vm_create.sh scripts/deploy_all.sh scripts/check_results.sh scripts/cleanup_gcp.sh scripts/td3_pipeline.sh scripts/build_linux.sh"
 # shellcheck disable=SC2086
 BAD=$(grep -nE 'declare -A|mapfile|readarray|wait -n|\$\{[A-Za-z_]+(,,|\^\^)|&>>|\|&|EPOCHREALTIME|local -n|sed -i|date -d|stat -c|readlink -f|(^|[^_])timeout |grep -P|\\\|' $CTRL | grep -v '^[^:]*:[0-9]*: *#')
 [ -z "$BAD" ] && pass "no bash 4+/GNU-only construct" || fail "non portable: $BAD"
@@ -254,6 +254,34 @@ if command -v go > /dev/null 2>&1; then
     RUN_ID=rr OUT_DIR="$T/rr_run" ./scripts/run_all.sh "$T/alloc_rr_small.csv" > /dev/null 2>&1 &&
     ./scripts/check_results.sh "$T/rr_run" > /dev/null 2>&1 &&
         pass "scheduler -> run_all.sh -> check_results.sh works end to end" || fail "end-to-end with the scheduler"
+else
+    echo "  skip  (go not installed)"
+fi
+
+echo "12. our scheduler (LPT, Go) + run summary"
+if command -v go > /dev/null 2>&1; then
+    setup
+    export GOCACHE=${GOCACHE:-$T/gocache}
+    go test scheduler/lpt_scheduler.go scheduler/lpt_scheduler_test.go > "$T/golpt.txt" 2>&1 &&
+        pass "go test: our nine tasks, longest tasks separated, order, vCPUs, memory, invalid inputs" ||
+        fail "go test lpt: $(grep -v '^  ' "$T/golpt.txt" | tail -20)"
+    go build -o "$T/lpt" scheduler/lpt_scheduler.go || fail "go build lpt"
+    for pair in "tasks:allocation_lpt" "tasks_large:allocation_lpt_large"; do
+        tasks=${pair%%:*} alloc=${pair#*:}
+        "$T/lpt" "data/$tasks.csv" data/machines.csv data/benchmark_local.csv "$T/$alloc.csv" > /dev/null &&
+            cmp -s "$T/$alloc.csv" "data/$alloc.csv" &&
+            TASKS="data/$tasks.csv" ./scripts/validate_allocation.sh "$T/$alloc.csv" > /dev/null 2>&1 &&
+            pass "data/$alloc.csv is exactly the scheduler output, and valid" || fail "data/$alloc.csv"
+    done
+    create_and_deploy
+    printf 'workload,size,run,runtime_s,max_rss_kb\ncpu_task,2000000,1,0.5,2500\nmemory_task,256,1,0.3,270000\nmatrix_task,800,1,0.6,17000\nsort_task,2000000,1,0.4,20000\ncpu_task,1000000,1,0.2,2500\n' > "$T/profile.csv"
+    "$T/lpt" "$FIX/tasks_small.csv" data/machines.csv "$T/profile.csv" "$T/alloc_lpt_small.csv" > /dev/null &&
+    RUN_ID=lpt OUT_DIR="$T/lpt_run" ./scripts/run_all.sh "$T/alloc_lpt_small.csv" > /dev/null 2>&1 &&
+    ./scripts/check_results.sh "$T/lpt_run" > /dev/null 2>&1 &&
+        pass "our scheduler -> run_all.sh -> check_results.sh works end to end" || fail "end-to-end with lpt"
+    ./scripts/summarize_run.sh "$T/lpt_run" > "$T/sum.txt" 2>&1 &&
+        grep -q "tasks OK: 5 / 5 *makespan: [0-9.]* s" "$T/sum.txt" && grep -q "cost (each VM" "$T/sum.txt" &&
+        pass "summarize_run.sh prints makespan, busy time per VM and cost" || fail "summarize: $(cat "$T/sum.txt")"
 else
     echo "  skip  (go not installed)"
 fi
