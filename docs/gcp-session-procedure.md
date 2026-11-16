@@ -352,8 +352,9 @@ Table to fill, one per task set (`finish` of `predict_makespan` against
 | greedy | 2 | | | | | | |
 
 The measured makespan also contains the delay between the first task started
-on one VM and on another (under 0.6 s in the previous sessions), which the
-prediction ignores.
+on one VM and on another, which the prediction ignores. Measured on 16/11:
+under 0.6 s with 9 tasks, 1.7 s with the 18 generated tasks (Round-Robin), and
+2.3 to 4.5 s with 27 tasks (the last task starts up to 5 s after the first).
 
 `sort_task` on e2-standard-2, only if the gate of "Decided before" passed:
 
