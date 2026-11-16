@@ -175,7 +175,10 @@ VMs, this one had two Intel VMs out of three.
 
 ## 10. Next step: learn the runtime of each task on each machine
 
-Plan: a small supervised regression written in Go, trained on our benchmark data. For each
-workload, runtime = a x size^b, fitted by least squares on log(runtime) and log(size); for each
-CPU platform, a speed factor per workload. Validated by leaving one size out at a time. The
-scheduler keeps the same algorithm and uses these predicted runtimes, which differ per VM.
+Done: see results/ml_model.md. A small supervised regression written in Go
+(ml/runtime_model.go), trained on clean measurements (tasks run alone). For each workload,
+runtime = a x size^b, fitted by least squares on log(runtime) and log(size); for each CPU
+platform, a speed factor per workload. Validated by leaving one size out at a time. The
+scheduler has a model mode (-model, -platforms) that uses a predicted runtime per VM, with the
+same "longest first" order and the VM of smallest estimated finish time. The table mode
+described above is unchanged.

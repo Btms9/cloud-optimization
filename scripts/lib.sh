@@ -94,6 +94,34 @@ check_machines_file() {
         die "'$MACHINES' must start with the header '$MACHINES_HEADER'"
 }
 
+# cpu_platform FILE -> the CPU platform of a machine description written by
+# deploy_all.sh (or any file holding the output of lscpu):
+#   "<Model name> [<CPU family>/<Model>]", for example
+#   "Intel(R) Xeon(R) CPU @ 2.20GHz [6/79]" (Broadwell) or "AMD EPYC 7B12 [23/49]".
+# The family/model numbers are added because GCP shows a generic name for its
+# Intel CPUs ("Intel(R) Xeon(R) CPU @ x GHz"), which alone does not identify
+# the generation. This is the key of the speed factors of the ML model
+# (cpu_model column of data/ml_training.csv). Exit code 1 if no Model name.
+cpu_platform() {
+    awk '
+        { sub(/\r$/, "") }
+        index($0, ":") > 0 {
+            key = substr($0, 1, index($0, ":") - 1)
+            val = substr($0, index($0, ":") + 1)
+            gsub(/^[ \t]+|[ \t]+$/, "", key)
+            gsub(/^[ \t]+|[ \t]+$/, "", val)
+            gsub(/[ \t]+/, " ", val)
+            if (key == "Model name" && name == "") name = val
+            if (key == "CPU family" && family == "") family = val
+            if (key == "Model" && model == "") model = val
+        }
+        END {
+            if (name == "") exit 1
+            gsub(/,/, " ", name)              # the value goes into a CSV file
+            printf "%s [%s/%s]\n", name, family, model
+        }' "$1"
+}
+
 # SHA-256 of a file (shasum on macOS, sha256sum on Linux)
 sha256_of() {
     if command -v shasum >/dev/null 2>&1; then

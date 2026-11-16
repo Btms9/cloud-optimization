@@ -228,7 +228,7 @@ echo "n" | ./scripts/cleanup_gcp.sh --delete > /dev/null 2>&1
 pass "--delete without --yes asks first (answered no)"
 
 echo "10. portability (macOS bash 3.2, BSD tools) of the controller scripts"
-CTRL="scripts/summarize_run.sh scripts/lib.sh scripts/run_task.sh scripts/run_all.sh scripts/validate_allocation.sh scripts/vm_create.sh scripts/deploy_all.sh scripts/check_results.sh scripts/cleanup_gcp.sh scripts/td3_pipeline.sh scripts/build_linux.sh"
+CTRL="scripts/summarize_run.sh scripts/lib.sh scripts/run_task.sh scripts/run_all.sh scripts/validate_allocation.sh scripts/vm_create.sh scripts/deploy_all.sh scripts/check_results.sh scripts/cleanup_gcp.sh scripts/td3_pipeline.sh scripts/build_linux.sh scripts/vm_platforms.sh scripts/ml_train.sh scripts/profiling_allocation.sh"
 # shellcheck disable=SC2086
 BAD=$(grep -nE 'declare -A|mapfile|readarray|wait -n|\$\{[A-Za-z_]+(,,|\^\^)|&>>|\|&|EPOCHREALTIME|local -n|sed -i|date -d|stat -c|readlink -f|(^|[^_])timeout |grep -P|\\\|' $CTRL | grep -v '^[^:]*:[0-9]*: *#')
 [ -z "$BAD" ] && pass "no bash 4+/GNU-only construct" || fail "non portable: $BAD"
@@ -282,6 +282,71 @@ if command -v go > /dev/null 2>&1; then
     ./scripts/summarize_run.sh "$T/lpt_run" > "$T/sum.txt" 2>&1 &&
         grep -q "tasks OK: 5 / 5 *makespan: [0-9.]* s" "$T/sum.txt" && grep -q "cost (each VM" "$T/sum.txt" &&
         pass "summarize_run.sh prints makespan, busy time per VM and cost" || fail "summarize: $(cat "$T/sum.txt")"
+else
+    echo "  skip  (go not installed)"
+fi
+
+echo "13. runtime model (ML): platforms, profiling, training, model mode of the scheduler"
+if command -v go > /dev/null 2>&1; then
+    setup
+    export GOCACHE=${GOCACHE:-$T/gocache}
+    go test ml/runtime_model.go ml/runtime_model_test.go > "$T/goml.txt" 2>&1 &&
+        pass "go test: power-law fit, speed factors, leave-one-size-out, file formats" ||
+        fail "go test ml: $(grep -v '^  ' "$T/goml.txt" | tail -20)"
+    go build -o "$T/runtime_model" ml/runtime_model.go || fail "go build runtime_model"
+    "$T/runtime_model" data/ml_training.csv "$T/model.csv" "$T/val.csv" > /dev/null &&
+        cmp -s "$T/model.csv" data/runtime_model.csv && cmp -s "$T/val.csv" results/ml_validation.csv &&
+        cmp -s "$T/val_detail.csv" results/ml_validation_detail.csv &&
+        pass "data/runtime_model.csv and results/ml_validation*.csv are exactly what data/ml_training.csv gives" ||
+        fail "model or validation files differ from a retraining on data/ml_training.csv"
+    . scripts/lib.sh
+    [ "$(cpu_platform data/machine_20261113_cloudopt-vm2.txt)" = "Intel(R) Xeon(R) CPU @ 2.20GHz [6/79]" ] &&
+        [ "$(cpu_platform data/machine_local.txt)" = "AMD EPYC 7543 32-Core Processor [25/1]" ] &&
+        pass "cpu_platform reads Model name [family/model] from both lscpu layouts" || fail "cpu_platform"
+    create_and_deploy
+    OUT="$T/platforms.csv" ./scripts/vm_platforms.sh > "$T/vp.txt" 2>&1 &&
+        [ "$(wc -l < "$T/platforms.csv" | tr -d ' ')" -eq 4 ] && [ "$(head -1 "$T/platforms.csv")" = "vm,machine_type,cpu_model" ] &&
+        awk -F, 'NR > 1 && $3 !~ /\[[0-9]+\/[0-9]+\]$/ { bad = 1 } END { exit bad }' "$T/platforms.csv" &&
+        pass "vm_platforms.sh writes the CPU platform of each VM after deploy_all.sh" || fail "vm_platforms: $(cat "$T/vp.txt")"
+    TAG=other OUT="$T/p2.csv" ./scripts/vm_platforms.sh > "$T/vp2.txt" 2>&1
+    [ $? -ne 0 ] && grep -q "run ./scripts/deploy_all.sh first" "$T/vp2.txt" && pass "vm_platforms.sh: clear error if the VMs were not deployed" || fail "vm_platforms without deploy"
+    CPU_SIZES="2000000 4000000" MEMORY_SIZES="64 128" MATRIX_SIZES="300 400" SORT_SIZES="1000000 2000000" RUNS=2 \
+        ./scripts/profiling_allocation.sh "$T/prof.csv" cloudopt-vm1 cloudopt-vm2 > /dev/null 2>&1 &&
+        [ "$(csv_rows "$T/prof.csv" | wc -l | tr -d ' ')" -eq 32 ] && ./scripts/validate_allocation.sh "$T/prof.csv" > /dev/null 2>&1 &&
+        pass "profiling_allocation.sh: 2 VMs x 4 workloads x 2 sizes x 2 runs, valid allocation" || fail "profiling allocation"
+    MEMORY_SIZES="512 4096" ./scripts/profiling_allocation.sh "$T/prof2.csv" cloudopt-vm2 > "$T/prof2.txt" 2>&1
+    grep -q "memory_task 4096 MB skipped" "$T/prof2.txt" && grep -q "memory_task,512,cloudopt-vm2" "$T/prof2.csv" &&
+        ! grep -q "memory_task,4096,cloudopt-vm2" "$T/prof2.csv" && pass "profiling never puts more than 85 % of the memory of a VM" || fail "profiling memory"
+    MODE=queue RUN_ID=prof OUT_DIR="$T/prof" ./scripts/run_all.sh "$T/prof.csv" > /dev/null 2>&1 &&
+        ./scripts/check_results.sh "$T/prof" 2>&1 | grep -q "cloudopt-vm1 *16 tasks, up to 1 at the same time" &&
+        pass "the profiling campaign runs in MODE=queue: one task at a time per VM" || fail "profiling run"
+    cp data/ml_training.csv "$T/train.csv"
+    export TRAINING="$T/train.csv" MODEL="$T/m.csv" VALIDATION="$T/v.csv" MIN_RUNTIME=0
+    (unset TAG; ./scripts/ml_train.sh "$T/prof") > "$T/tr1.txt" 2>&1
+    [ $? -ne 0 ] && grep -q "machine_prof_cloudopt-vm1.txt not found: give the TAG" "$T/tr1.txt" && pass "ml_train.sh: clear error when the machine descriptions of the run are not found" || fail "ml_train TAG: $(cat "$T/tr1.txt")"
+    TAG=test ./scripts/ml_train.sh "$T/prof" > "$T/tr2.txt" 2>&1 &&
+        [ "$(csv_rows "$T/train.csv" | wc -l | tr -d ' ')" -eq $(($(csv_rows data/ml_training.csv | wc -l) + 32)) ] &&
+        [ "$(awk -F, 'NR > 1 && $9 == "prof"' "$T/train.csv" | cut -d, -f7 | sort -u)" = "$(sed -n 2p "$T/platforms.csv" | cut -d, -f3)" ] &&
+        pass "ml_train.sh adds the 32 queue measurements with their CPU platform, then retrains" || fail "ml_train add: $(tail -5 "$T/tr2.txt")"
+    grep -q "^sort_task,.*,reference," "$MODEL" && grep -qF "$(sed -n 2p "$T/platforms.csv" | cut -d, -f3)" "$MODEL" &&
+        [ -s "$VALIDATION" ] && pass "the new platform and sort_task are in the retrained model, MAPE file written" || fail "retrained model: $(cat "$MODEL")"
+    TAG=test ./scripts/ml_train.sh "$T/prof" 2>&1 | grep -q "already in" &&
+        [ "$(csv_rows "$T/train.csv" | wc -l | tr -d ' ')" -eq $(($(csv_rows data/ml_training.csv | wc -l) + 32)) ] &&
+        pass "a run is added only once" || fail "duplicate run"
+    RUN_ID=conc OUT_DIR="$T/conc" ./scripts/run_all.sh "$FIX/alloc_small.csv" > /dev/null 2>&1
+    TAG=test ./scripts/ml_train.sh "$T/conc" > "$T/tr3.txt" 2>&1
+    [ $? -ne 0 ] && grep -q "not 'queue'" "$T/tr3.txt" && pass "ml_train.sh refuses a concurrent run (shared vCPUs)" || fail "concurrent accepted: $(cat "$T/tr3.txt")"
+    go build -o "$T/lpt" scheduler/lpt_scheduler.go || fail "go build lpt"
+    "$T/lpt" -model "$MODEL" -platforms "$T/platforms.csv" "$FIX/tasks_small.csv" data/machines.csv "$T/alloc_ml.csv" > "$T/ml.txt" 2>&1 &&
+        [ "$(head -1 "$T/alloc_ml.csv")" = "task_id,workload,size,vm" ] && [ "$(awk -F, '{ print NF }' "$T/alloc_ml.csv" | sort -u)" = 4 ] &&
+        TASKS="$FIX/tasks_small.csv" ./scripts/validate_allocation.sh "$T/alloc_ml.csv" > /dev/null 2>&1 &&
+        RUN_ID=ml OUT_DIR="$T/ml_run" ./scripts/run_all.sh "$T/alloc_ml.csv" > /dev/null 2>&1 && ./scripts/check_results.sh "$T/ml_run" > /dev/null 2>&1 &&
+        pass "model mode: same 4-column allocation, runs end to end with run_all.sh" || fail "model mode end to end: $(cat "$T/ml.txt")"
+    printf 'vm,cpu_model\ncloudopt-vm1,Unknown CPU [1/1]\n' > "$T/pu.csv"
+    "$T/lpt" -model "$MODEL" -platforms "$T/pu.csv" "$FIX/tasks_small.csv" data/machines.csv "$T/alloc_u.csv" > /dev/null 2> "$T/u.txt" &&
+        grep -q 'platform "Unknown CPU \[1/1\]" (VM cloudopt-vm1) has no speed factor' "$T/u.txt" && grep -q "cloudopt-vm2 is not in the platforms file" "$T/u.txt" &&
+        pass "unknown platform or VM: warning, factor 1, allocation written" || fail "unknown platform: $(cat "$T/u.txt")"
+    unset TRAINING MODEL VALIDATION MIN_RUNTIME
 else
     echo "  skip  (go not installed)"
 fi

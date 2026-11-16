@@ -1,0 +1,9 @@
+workload,platform,role,speed_factor,b,b_theory,sizes,runs,spread_pct,checks,mape_pct,mape_no_factor_pct,max_error_pct,rss_mape_pct
+cpu_task,AMD EPYC 7543 32-Core Processor [25/1],reference,1.000,1.420,1.440,3,9,0.2,3,0.2,0.2,0.3,0.7
+cpu_task,ALL,,,,,,,,3,0.2,0.2,0.3,0.7
+matrix_task,AMD EPYC 7543 32-Core Processor [25/1],reference,0.993,3.030,3.000,3,9,2.9,3,3.2,3.3,5.0,2.5
+matrix_task,ALL,,,,,,,,3,3.2,3.3,5.0,2.5
+memory_task,AMD EPYC 7543 32-Core Processor [25/1],reference,0.999,0.996,1.000,3,9,3.2,3,1.6,1.2,2.3,0.1
+memory_task,Intel(R) Xeon(R) CPU @ 2.20GHz [6/79],measured,1.792,,,2,4,20.1,2,13.4,45.8,14.8,0.1
+memory_task,ALL,,,,,,,,5,6.4,19.0,14.8,0.1
+ALL,ALL,,,,,,,,11,3.8,9.6,14.8,0.9
