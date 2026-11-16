@@ -202,6 +202,73 @@ class Generate(Folder):
             gt.generate(self.sizes(), 0, random.Random(1))
 
 
+class MemoryLimit(Folder):
+    """--max-task-mb. "mem" lasts 0.25 * size (4..48 for 1 to 15 s, like lin)
+    and uses 1024 kB * size: its memory in MB is its size."""
+
+    MEM = ("mem,ref,0.25,1,1.0,1024,1,2,100,reference,X,lscpu\n"
+           "mem,slow,0.25,1,1.25,1024,1,2,100,measured,X,lscpu\n")
+
+    def setUp(self):
+        super().setUp()
+        self.model = self.write("model.csv", MODEL_HEADER + self.MEM)
+
+    def mem(self, max_task_mb):
+        workloads, model = gt.load_model(self.model, self.machines)
+        return gt.allowed_sizes("mem", model["mem"], 1.0, 15.0, max_task_mb)
+
+    def test_a_task_never_uses_more_than_the_limit(self):
+        s = self.mem(20)
+        self.assertEqual((s.lo, s.hi), (4, 20))    # 20 MB is allowed, 21 MB is not
+        self.assertAlmostEqual(s.longest, 6.25)    # size 20 on slow
+        self.assertAlmostEqual(s.largest_mb, 20.0)
+
+    def test_a_limit_between_two_sizes_keeps_the_smaller_one(self):
+        self.assertEqual(self.mem(20.5).hi, 20)
+
+    def test_a_limit_above_the_largest_task_changes_nothing(self):
+        s = self.mem(1024)
+        self.assertEqual((s.lo, s.hi), (4, 48))
+        self.assertAlmostEqual(s.largest_mb, 48.0)
+
+    def test_no_limit(self):
+        self.assertEqual(self.mem(None).hi, 48)
+
+    def test_a_limit_under_the_smallest_task_is_an_error_naming_the_workload(self):
+        with self.assertRaises(ValueError) as caught:
+            self.mem(3)     # the shortest task (1 s) already uses 4 MB
+        self.assertIn("mem", str(caught.exception))
+        self.assertIn("3 MB", str(caught.exception))
+
+    def test_the_option_limits_every_task_of_the_file(self):
+        out = os.path.join(self.dir, "tasks.csv")
+        code, stdout, _ = self.run_main("--seed", "1", "--count", "200", "--out", out,
+                                        "--max-task-mb", "20")
+        self.assertEqual(code, 0)
+        sizes = [int(t[2]) for t in self.read_tasks(out)]
+        self.assertEqual((min(sizes), max(sizes)), (4, 20))
+        self.assertRegex(stdout, r"mem +sizes +4 to +20")
+        self.assertIn("at most 20 MB per task", stdout)
+
+    def test_zero_means_no_limit(self):
+        out = os.path.join(self.dir, "tasks.csv")
+        code, stdout, _ = self.run_main("--seed", "1", "--count", "200", "--out", out,
+                                        "--max-task-mb", "0")
+        self.assertEqual(code, 0)
+        # 48 is the largest allowed size; the largest of these 200 draws is 47
+        self.assertGreater(max(int(t[2]) for t in self.read_tasks(out)), 45)
+        self.assertRegex(stdout, r"mem +sizes +4 to +48")
+        self.assertIn("no memory limit per task", stdout)
+
+    def test_a_negative_limit_is_refused(self):
+        out = os.path.join(self.dir, "tasks.csv")
+        code, _, stderr = self.run_main("--seed", "1", "--count", "5", "--out", out,
+                                        "--max-task-mb", "-1")
+        self.assertEqual(code, 1)
+        self.assertIn("max-task-mb", stderr)
+        self.assertFalse(os.path.exists(out))
+
+
 class Main(Folder):
     def test_writes_a_task_file_in_the_format_of_the_schedulers(self):
         out = os.path.join(self.dir, "tasks.csv")
@@ -333,15 +400,55 @@ class RealData(unittest.TestCase):
         self.assertTrue(14.9 < cpu.longest <= 15.0, cpu.longest)
 
     def test_allowed_sizes_are_exactly_the_sizes_inside_the_bounds(self):
-        for w in self.measured():
-            rows = self.model[w]
-            s = gt.allowed_sizes(w, rows, 1.0, 15.0)
+        for limit_mb in (None, 1024):
+            for w in self.measured():
+                rows = self.model[w]
+                s = gt.allowed_sizes(w, rows, 1.0, 15.0, limit_mb)
 
-            def allowed(size):
-                return all(int(r["size_min"]) <= size <= int(r["size_max"])
-                           and 1.0 <= gt.runtime(r, size) <= 15.0 for r in rows)
-            self.assertTrue(allowed(s.lo) and allowed(s.hi), s)
-            self.assertFalse(allowed(s.lo - 1) or allowed(s.hi + 1), s)
+                def allowed(size):
+                    return all(int(r["size_min"]) <= size <= int(r["size_max"])
+                               and 1.0 <= gt.runtime(r, size) <= 15.0
+                               and (limit_mb is None
+                                    or gt.rss_kb(r, size) <= limit_mb * 1024)
+                               for r in rows)
+                self.assertTrue(allowed(s.lo) and allowed(s.hi), s)
+                self.assertFalse(allowed(s.lo - 1) or allowed(s.hi + 1), s)
+
+    def test_one_gb_per_task_only_shortens_the_memory_tasks(self):
+        for w in self.measured():
+            free = gt.allowed_sizes(w, self.model[w], 1.0, 15.0, None)
+            limited = gt.allowed_sizes(w, self.model[w], 1.0, 15.0, 1024)
+            if w == "memory_task":
+                self.assertEqual((free.lo, free.hi), (653, 4096))
+                self.assertEqual(limited.lo, 653)
+                self.assertTrue(1000 < limited.hi < 1024, limited.hi)
+                self.assertTrue(1.5 < limited.longest < 2.0, limited.longest)
+            else:
+                self.assertEqual(limited, free)
+
+    def test_a_negative_limit_is_refused_before_any_computation(self):
+        err = io.StringIO()
+        with tempfile.TemporaryDirectory() as folder:
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+                code = gt.main(["--seed", "1", "--count", "5", "--max-task-mb", "-1",
+                                "--out", os.path.join(folder, "tasks.csv")])
+        self.assertEqual(code, 1)
+        self.assertIn("Error: --max-task-mb must be 0", err.getvalue())
+
+    def test_the_default_is_one_gb_per_task(self):
+        def largest_mb(*extra):
+            with tempfile.TemporaryDirectory() as folder:
+                out = os.path.join(folder, "tasks.csv")
+                with contextlib.redirect_stdout(io.StringIO()):
+                    code = gt.main(["--seed", "1", "--count", "60", "--out", out] + list(extra))
+                self.assertEqual(code, 0)
+                tasks = gt.read_csv(out)
+            self.assertIn("memory_task", [t["workload"] for t in tasks])
+            return max(gt.rss_kb(self.model[t["workload"]][0], int(t["size"])) / 1024.0
+                       for t in tasks)
+        self.assertTrue(900 < largest_mb() <= 1024)
+        self.assertEqual(largest_mb(), largest_mb("--max-task-mb", "1024"))
+        self.assertGreater(largest_mb("--max-task-mb", "0"), 3000)
 
     def test_the_committed_lot_is_exactly_what_its_command_writes(self):
         # data/tasks_gen_s1.csv: the lot of the GCP procedure. The workloads are
@@ -350,6 +457,7 @@ class RealData(unittest.TestCase):
             out = os.path.join(folder, "tasks.csv")
             with contextlib.redirect_stdout(io.StringIO()):
                 code = gt.main(["--seed", "1", "--count", "18", "--out", out,
+                                "--max-task-mb", "1024",
                                 "--workloads", "cpu_task,memory_task,matrix_task"])
             self.assertEqual(code, 0)
             with open(out, "rb") as f:

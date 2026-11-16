@@ -17,17 +17,18 @@
 #      (data/model.csv): runtime = factor * a * size^b, so
 #      size = (runtime / a)^(1/b) on the reference machine (factor 1).
 #
-# Allowed sizes of a workload: inside the range that was measured, and a
-# predicted runtime between --min-s and --max-s (1 and 15 s) on EVERY machine
-# type of machines.csv.
+# Allowed sizes of a workload: inside the range that was measured, a predicted
+# runtime between --min-s and --max-s (1 and 15 s) on EVERY machine type of
+# machines.csv, and a predicted memory of at most --max-task-mb (1024 MB).
 #
 # Same seed, same options, same model.csv and machines.csv: same file. Only
 # random.Random(seed).random() is used: Python guarantees that this sequence
 # stays the same from one version to the next.
 #
 # Limits: the runtimes are predictions, valid on the CPU of the model only.
-# Memory is NOT checked: the tasks of a VM run at the same time and their
-# memory adds up, so a lot may fit on no allocation (the scheduler says so).
+# Only the memory of ONE task is limited: the tasks of a VM run at the same
+# time and their memory adds up, so a lot may still fit on no allocation (the
+# scheduler says so). Without --max-task-mb most random lots did not fit.
 #
 # Needs Python 3 only (no numpy).
 import argparse
@@ -44,9 +45,9 @@ MODEL_COLUMNS = ["workload", "machine_type", "a", "b", "factor", "c", "k",
                  "size_min", "size_max", "factor_source"]
 
 # What can be drawn for one workload: its model (a, b), the smallest and the
-# largest allowed size, and the runtime of these two sizes on the fastest and
-# on the slowest machine type.
-Sizes = namedtuple("Sizes", "workload a b lo hi shortest longest")
+# largest allowed size, the runtime of these two sizes on the fastest and on
+# the slowest machine type, and the memory of the largest size.
+Sizes = namedtuple("Sizes", "workload a b lo hi shortest longest largest_mb")
 
 
 def runtime(row, size):
@@ -129,9 +130,10 @@ def choose_workloads(workloads, model, asked):
     return chosen, notes
 
 
-def allowed_sizes(workload, rows, min_s, max_s):
-    """The sizes of a workload that were measured and whose runtime is between
-    min_s and max_s on every machine type (rows: one model row per type)."""
+def allowed_sizes(workload, rows, min_s, max_s, max_task_mb=None):
+    """The sizes of a workload that were measured, whose runtime is between
+    min_s and max_s on every machine type (rows: one model row per type), and
+    whose memory is at most max_task_mb (None or 0: no memory limit)."""
     a, b = float(rows[0]["a"]), float(rows[0]["b"])
     for r in rows:
         if float(r["a"]) != a or float(r["b"]) != b:
@@ -159,8 +161,26 @@ def allowed_sizes(workload, rows, min_s, max_s):
             % (workload, min_s, max_s, measured_lo, measured_hi,
                min(runtime(r, measured_lo) for r in rows),
                max(runtime(r, measured_hi) for r in rows)))
+
+    # Memory grows with the size as well: same method for the largest size
+    # whose predicted memory fits in the limit.
+    if max_task_mb:
+        limit_kb = max_task_mb * 1024.0
+        if any(float(r["c"]) <= 0 or float(r["k"]) <= 0 for r in rows):
+            raise ValueError("%s: c and k must be positive" % workload)
+        hi = min(hi, int(math.ceil(min(
+            (limit_kb / float(r["c"])) ** (1 / float(r["k"])) for r in rows))))
+        while hi >= lo and any(rss_kb(r, hi) > limit_kb for r in rows):
+            hi -= 1
+        if lo > hi:
+            raise ValueError(
+                "%s: its shortest allowed task (size %d, %.1f s) already uses %.0f MB, "
+                "more than the %g MB allowed per task (--max-task-mb)"
+                % (workload, lo, min(runtime(r, lo) for r in rows),
+                   max(rss_kb(r, lo) for r in rows) / 1024.0, max_task_mb))
     return Sizes(workload, a, b, lo, hi,
-                 min(runtime(r, lo) for r in rows), max(runtime(r, hi) for r in rows))
+                 min(runtime(r, lo) for r in rows), max(runtime(r, hi) for r in rows),
+                 max(rss_kb(r, hi) for r in rows) / 1024.0)
 
 
 def pick(sizes, u_workload, u_runtime):
@@ -203,13 +223,16 @@ def run(args):
         raise ValueError("--min-s must be positive and smaller than --max-s")
     if args.count < 1:
         raise ValueError("--count must be at least 1")
+    if args.max_task_mb < 0:
+        raise ValueError("--max-task-mb must be 0 (no limit) or more")
 
     workloads, model = load_model(args.model, args.machines)
     asked = None
     if args.workloads is not None:
         asked = [w.strip() for w in args.workloads.split(",") if w.strip()]
     chosen, notes = choose_workloads(workloads, model, asked)
-    sizes = [allowed_sizes(w, model[w], args.min_s, args.max_s) for w in chosen]
+    sizes = [allowed_sizes(w, model[w], args.min_s, args.max_s, args.max_task_mb)
+             for w in chosen]
     tasks = generate(sizes, args.count, random.Random(args.seed))
     try:
         write_tasks(args.out, tasks, args.force)
@@ -220,16 +243,19 @@ def run(args):
     print("Model: %s, machine types of %s: %s" % (args.model, args.machines, ", ".join(types)))
     for note in notes:
         print(note)
-    print("Tasks of %g to %g s alone, on every machine type:" % (args.min_s, args.max_s))
+    print("Tasks of %g to %g s alone, on every machine type, %s:"
+          % (args.min_s, args.max_s,
+             "at most %g MB per task" % args.max_task_mb if args.max_task_mb
+             else "no memory limit per task"))
     for s in sizes:
         drawn = sum(1 for t in tasks if t[1] == s.workload)
-        print("  %-12s sizes %9d to %9d | %5.1f to %5.1f s | %3d tasks"
-              % (s.workload, s.lo, s.hi, s.shortest, s.longest, drawn))
+        print("  %-12s sizes %9d to %9d | %5.1f to %5.1f s | up to %4.0f MB | %3d tasks"
+              % (s.workload, s.lo, s.hi, s.shortest, s.longest, s.largest_mb, drawn))
     print("Wrote %d tasks to %s (seed %d)" % (len(tasks), args.out, args.seed))
     memory = [rss_kb(model[w][0], size) / 1024.0 for _, w, size in tasks]
     print("Predicted memory: %.0f MB if all the tasks ran together, %.0f MB for the "
-          "largest one. Memory is NOT checked here: the scheduler does it."
-          % (sum(memory), max(memory)))
+          "largest one. The memory of a VM is NOT checked here (its tasks run "
+          "together): the scheduler does it." % (sum(memory), max(memory)))
     cpus = sorted(set(r.get("cpu_model", "") for w in chosen for r in model[w]))
     print("Model measured on: %s - these runtimes are only valid on this CPU" % ", ".join(cpus))
 
@@ -245,6 +271,9 @@ def main(argv=None):
                         help="shortest predicted runtime of a task alone (default 1)")
     parser.add_argument("--max-s", type=float, default=15.0,
                         help="longest predicted runtime of a task alone (default 15)")
+    parser.add_argument("--max-task-mb", type=float, default=1024.0,
+                        help="largest predicted memory of one task, in MB "
+                             "(default 1024; 0 = no limit)")
     parser.add_argument("--workloads", default=None,
                         help="comma-separated workloads (default: all those measured "
                              "on every machine type)")

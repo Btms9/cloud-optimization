@@ -7,6 +7,11 @@ covered by my measurements, with tasks of about 1 to 15 s"). The choices marked
 Scope: step 4 only. No scheduler, no orchestrator script and no existing data
 file is touched.
 
+Update of 16/11, after Youssef validated the step and asked for it: a largest
+memory per task (`--max-task-mb`, default 1024 MB), and the lot of the GCP
+session regenerated with it. The sections below describe the generator with
+that option.
+
 ## Why
 
 `data/tasks.csv` and `data/tasks_large.csv` only hold the sizes that were
@@ -25,15 +30,17 @@ reproducible.
 - Same seed, same options, same `model.csv` and `machines.csv`: same file,
   byte for byte.
 - Every task: a size inside the measured range of its workload
-  (`size_min`..`size_max` of `data/model.csv`), and a predicted runtime ALONE
+  (`size_min`..`size_max` of `data/model.csv`), a predicted runtime ALONE
   between `--min-s` and `--max-s` (default 1 and 15 s) on EVERY machine type of
-  `machines.csv`.
+  `machines.csv`, and a predicted memory of at most `--max-task-mb` (default
+  1024 MB, asked by Youssef; 0 = no limit).
 
 ## Non-goals
 
 - No allocation, no makespan: the lot goes through the existing schedulers and
   `predict_makespan`.
-- Memory is not checked (see Limits).
+- The memory of a VM is not checked: only the memory of one task is limited
+  (see Limits).
 - No arrival dates, no priorities: all tasks are there at the start, as in the
   rest of the project.
 
@@ -61,7 +68,8 @@ copy of the formula is checked by a test against the runtimes that
 3. For each workload, the allowed sizes `lo..hi`:
    - inside the measured range on every machine type;
    - `factor * a * size^b >= min-s` on the fastest machine type and
-     `<= max-s` on the slowest.
+     `<= max-s` on the slowest;
+   - `c * size^k <= max-task-mb` (predicted memory of the task).
    No size left: error naming the workload (it is not silently dropped).
 4. For each task, two numbers from the generator, in this order:
    - the workload: each one has the same chance;
@@ -70,8 +78,8 @@ copy of the formula is checked by a test against the runtimes that
      an integer and kept inside `lo..hi`.
 5. Tasks are named `T1`, `T2`, ... in the order they were drawn. The order is
    random too: Round-Robin gets no special order.
-6. Prints, per workload, the allowed sizes and runtimes and how many tasks were
-   drawn, then the total predicted memory of the lot.
+6. Prints, per workload, the allowed sizes, runtimes and largest memory and
+   how many tasks were drawn, then the total predicted memory of the lot.
 
 Randomness: `random.Random(seed).random()` only. Python guarantees that this
 sequence does not change between versions for the same seed (it does not
@@ -82,7 +90,7 @@ The output file is never overwritten unless `--force` is given: one wrong
 
 ```
 python scripts/gen_tasks.py --seed 3 --count 18 --out data/tasks_gen_s3.csv
-    [--min-s 1] [--max-s 15] [--workloads cpu_task,matrix_task]
+    [--min-s 1] [--max-s 15] [--max-task-mb 1024] [--workloads cpu_task,matrix_task]
     [--model data/model.csv] [--machines data/machines.csv] [--force]
 ```
 
@@ -92,27 +100,31 @@ python scripts/gen_tasks.py --seed 3 --count 18 --out data/tasks_gen_s3.csv
   valid on the CPU of the model. `cpu_task` cannot go below 2.6 s: its smallest
   measured size (4 million) already takes that long, and we do not go outside
   the measured range.
-- **Memory is not looked at.** All the tasks of a VM run at the same time, so
-  their memory adds up. A `memory_task` of 1 to 7 s uses 0.65 to 4 GB: a lot
-  with many of them may fit on no allocation (`greedy_scheduler` then says so)
-  and Round-Robin, which ignores memory, may put more than a VM has.
-  Seen on 16/11 with seeds 1 to 12, 18 tasks, default options (predictions
-  only, nothing run):
+- **Only the memory of ONE task is limited.** All the tasks of a VM run at
+  the same time, so their memory adds up, and the generator does not look at
+  the VMs. With the default limit, a `memory_task` is 653 to 1019 MB and lasts
+  1.0 to 1.8 s: **the memory tasks of a lot are now all short**. The other
+  workloads are not touched by 1024 MB (a `matrix_task` uses at most 92 MB).
 
-  | What happens | Seeds |
-  |---|---|
-  | `greedy_scheduler` finds no allocation | 3, 11 |
-  | Round-Robin puts on a VM more than it has free after boot (3.4 GB on the 4 GB VM, 7.4 GB on the 8 GB VM): 4.2 to 9.5 GB on the first, or 7.45 GB on the second | 2, 4, 6, 7, 8, 9, 10, 12 |
-  | Round-Robin above the 85 % limit of greedy but under what the VM has free (3.2 and 2.8 GB on the 4 GB VM) | 1, 5 |
-  | Both allocations under the limit | none |
+  Why the limit: without it (`--max-task-mb 0`, the first version of this
+  step) a `memory_task` of 1 to 7 s uses 0.65 to 4 GB, and most lots cannot be
+  run. `scripts/compare_seeds.py` on seeds 1 to 100, 18 tasks, on 16/11
+  (predictions only, nothing run):
 
-  On seed 2, Round-Robin is even predicted faster than greedy (27.1 s against
-  28.2 s): its allocation puts 9.5 GB on the 4 GB VM, so its tasks would be
-  killed and the figure means nothing. **A predicted makespan with a memory
-  warning must not be compared with one without.** So random lots, as asked,
-  are mostly a test of the memory constraint, not of the makespan. Whether the
-  generator should get a memory option (for example a largest memory per task)
-  is Youssef's decision: nothing of the kind was added.
+  | | No limit | 1024 MB per task (default) |
+  |---|---|---|
+  | `greedy_scheduler` finds no allocation | 9 lots | 0 |
+  | Round-Robin above the memory limit of a VM (85 % after 1 GB for the system) | 82 lots, up to 11.4 GB on the 4 GB VM | 14 lots, up to 3.6 GB on the 4 GB VM |
+  | greedy predicted slower than Round-Robin | 5 lots (worst +15.7 %) | 0 |
+
+  So the limit does not make Round-Robin safe: in 14 lots of 100 it still puts
+  more than 2611 MB on `cloudopt-vm2`. Without the limit, greedy is predicted
+  slower than Round-Robin in 5 lots: in 3 of them Round-Robin is above a
+  memory limit that greedy respects, so the two figures cannot be compared
+  (**a predicted makespan with a memory warning must not be compared with one
+  without**); in the 2 others (worst +6.2 %) Round-Robin is under the limit and
+  simply does better: greedy is a heuristic, and large memory tasks leave it
+  little choice. See `2026-11-16-seed-comparison-design.md`.
 - **A lot depends on `model.csv`.** After a new fit, the same seed can give
   other sizes; and once `sort_task` is measured on e2-standard-2 it is drawn
   by default, which changes every lot. A lot that has been run on GCP is kept
@@ -120,25 +132,27 @@ python scripts/gen_tasks.py --seed 3 --count 18 --out data/tasks_gen_s3.csv
 
 ## The committed lot
 
-`data/tasks_gen_s1.csv`, for the next GCP session:
+`data/tasks_gen_s1.csv`, for the next GCP session (regenerated on 16/11 with
+the memory limit; the first version, without limit, was never run):
 
 ```
-python scripts/gen_tasks.py --seed 1 --count 18 \
-    --workloads cpu_task,memory_task,matrix_task --out data/tasks_gen_s1.csv
+python scripts/gen_tasks.py --seed 1 --count 18 --max-task-mb 1024 --workloads cpu_task,memory_task,matrix_task --out data/tasks_gen_s1.csv
 ```
 
 Seed 1 because it is the first one; 18 tasks is our call (between the 9 and
-the 27 of the existing lots). 9 `cpu_task`, 4 `memory_task`, 5 `matrix_task`,
-1.0 to 14.3 s alone. `data/allocation_rr_gen_s1.csv` and
-`data/allocation_greedy_gen_s1.csv` are the outputs of the unmodified
-schedulers: predicted makespan 31.6 s and 23.0 s (-27.2 %), lower bound 20.4 s.
-- Each workload has the same chance, and runtimes are spread evenly: this is
-  not the mix of a real workload, it is a test input.
+the 27 of the existing lots). The command names the limit and the workloads so
+that it keeps giving this lot if a default changes. 9 `cpu_task`,
+4 `memory_task` (817 to 942 MB), 5 `matrix_task`, 1.0 to 14.3 s alone.
+`data/allocation_rr_gen_s1.csv` and `data/allocation_greedy_gen_s1.csv` are
+the outputs of the unmodified schedulers: predicted makespan 27.6 s and 20.3 s
+(-26.6 %), lower bound 18.1 s, no memory warning for either.
 
 ## Tests
 
 `tests/test_gen_tasks.py` (no VM, no GCP): allowed sizes on a small model
 computed by hand; the mapping from the two random numbers to a task; same seed
 same file, other seed other file; the 1-15 s and measured-range rules on
-thousands of drawn tasks, with the small model and with the real one; file
-format; no overwrite; assumed workloads; errors.
+thousands of drawn tasks, with the small model and with the real one; the
+memory limit (inclusive, default 1024 MB, 0 = none, error when nothing fits);
+file format; no overwrite; assumed workloads; errors; the committed lot is
+what its command writes.
