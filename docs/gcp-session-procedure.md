@@ -9,9 +9,10 @@ were made by Claude.
 Rehearsed on 16/11 in WSL with the fake gcloud of `tests/mock` (each "VM" is a
 local folder): steps 0 to 4, 6 and 7 ran as written, including the replacement
 of one VM and the conversion of the `sort_task` rows. Not rehearsed: the
-27-task runs and the runs of the generated lot (each would really allocate
-11 GB on the PC; only their validation of step 0 was run), and anything that
-depends on real VMs (SSH, CPU, timings).
+27-task runs (they would really allocate 11 GB on the PC; only their
+validation of step 0 was run), and anything that depends on real VMs (SSH,
+CPU, timings). Step 5b (the generated lot, 3.7 GB) was rehearsed the same way
+on 16/11, one run of each allocation.
 
 ## What the session must answer
 
@@ -51,26 +52,30 @@ Predicted values (computed on 16/11 with `bin/predict_makespan`, efficiency 0.63
 | 9 tasks | `allocation_greedy.csv` | 49.7 s | 18.0 s | 21.0 s | 49.7 s (-20.3 %) |
 | 27 tasks (`tasks_large.csv`) | `allocation_rr_large.csv` | 22.1 s | 32.2 s | 164.0 s | 164.0 s |
 | 27 tasks | `allocation_greedy_large.csv` | 76.6 s | 74.8 s | 76.1 s | 76.6 s (-53.3 %) |
-| 18 random tasks (`tasks_gen_s1.csv`) | `allocation_rr_gen_s1.csv` | 27.3 s | 15.5 s | 31.6 s | 31.6 s |
-| 18 random tasks | `allocation_greedy_gen_s1.csv` | 22.6 s | 22.3 s | 23.0 s | 23.0 s (-27.2 %) |
+| 18 random tasks (`tasks_gen_s1.csv`) | `allocation_rr_gen_s1.csv` | 24.5 s | 14.0 s | 27.6 s | 27.6 s |
+| 18 random tasks | `allocation_greedy_gen_s1.csv` | 20.2 s | 20.3 s | 19.9 s | 20.3 s (-26.6 %) |
 
 With 9 tasks greedy cannot do better than 49.7 s: it is `cpu_task 32000000`
 alone on a VM (the lower bound). The 27 tasks are the real test of the sharing
 estimate.
 
 **The generated lot** was fixed on 16/11, before any measure:
-`python scripts/gen_tasks.py --seed 1 --count 18 --workloads cpu_task,memory_task,matrix_task --out data/tasks_gen_s1.csv`.
-Seed 1 is the first seed, not a chosen one, and 18 tasks is our call (between
-the two existing lots; about 30 s per run). The two allocations are the output
-of the unmodified schedulers on that file. Its lower bound is 20.4 s.
-For information, seeds 1 to 12 were looked at (predictions only, see the
-step 4 spec): no lot has both allocations under the memory limit. In 2 lots
-(seeds 3 and 11) greedy finds no allocation; in the 10 others Round-Robin puts
-more than the limit on `cloudopt-vm2` or `cloudopt-vm1`, and in 8 of them more
-than the VM really has (up to 9.5 GB predicted on the 4 GB VM). Seed 1 is one
-of the two lots (with seed 5) that Round-Robin should survive: the same
-situation as the 27 tasks (below). Had seed 1 been one of the 8, the lot would
-have needed a rule to choose it; it did not.
+`python scripts/gen_tasks.py --seed 1 --count 18 --max-task-mb 1024 --workloads cpu_task,memory_task,matrix_task --out data/tasks_gen_s1.csv`.
+Seed 1 is the first seed, not a chosen one; 18 tasks is our call (between the
+two existing lots; about 25 s per run); at most 1024 MB per task was asked by
+Youssef on 16/11, after the first lots drawn without a limit could mostly not
+be run (memory). The two allocations are the output of the unmodified
+schedulers on that file. Its lower bound is 18.1 s. Neither allocation is above
+a memory limit (Round-Robin: 977 MB of 2611 on `cloudopt-vm2`).
+
+Where this lot stands among others (`python3 scripts/compare_seeds.py`, in
+WSL, 4 seconds, predictions only): on seeds 1 to 100 drawn the same way,
+greedy is predicted faster in all 100 lots, by 29.1 % on average (from 0.3 %
+to 52.8 %), and Round-Robin is above the memory limit of `cloudopt-vm2` in 14
+lots. Seed 1 (-26.6 %, no memory warning) is an ordinary lot, neither the best
+nor the worst. These 100 figures are predictions made with the estimator that
+greedy itself optimises: they say what to expect, not what is true. The four
+runs of step 5b are the only measure.
 
 ## Risks to know before starting
 
@@ -82,9 +87,10 @@ have needed a rule to choose it; it did not.
   3346 MB predicted on the same VM and all 27 tasks passed. If a task is
   killed, the run is reported as it is (Round-Robin does not look at memory);
   it is not run again until it passes.
-- **Same thing for Round-Robin on the generated lot**: 3190 MB predicted on
-  `cloudopt-vm2` (one `memory_task` of 3131 MB and five small tasks), under
-  what the VM has, above the limit of greedy. Same rule: reported as it is.
+- **The generated lot has no memory risk** (at most 2694 MB predicted on a VM,
+  on the 8 GB one, with greedy). Its risk is elsewhere: its four `memory_task`
+  last 1.3 to 1.6 s, so the measured makespan depends almost only on
+  `cpu_task` and `matrix_task`.
 - **One run per allocation proves little.** Each allocation runs twice. And
   one random lot is one draw: it says nothing about random lots in general.
 - **The session is billed from step 1 to step 6**, about 0.30 USD per hour for
@@ -270,8 +276,9 @@ for r in results/runs/${TAG}-27-*; do ./scripts/check_results.sh "$r" || echo "C
 
 ## 5b. Round-Robin and greedy, generated lot (18 tasks)
 
-`data/tasks_gen_s1.csv`: 9 `cpu_task`, 4 `memory_task`, 5 `matrix_task`, in a
-random order, with sizes that were never profiled (1.0 to 14.3 s alone). Same
+`data/tasks_gen_s1.csv`: 9 `cpu_task`, 4 `memory_task` (817 to 942 MB),
+5 `matrix_task`, in a random order, with sizes that were never profiled (1.0
+to 14.3 s alone). Same
 order of runs. About 1 minute per run.
 
 ```bash
@@ -373,6 +380,8 @@ is the lot that was run. Its command names the three workloads because, once
 `sort_task` is measured, the generator draws it too by default and the same
 seed then gives another lot (checked on 16/11 in the same copy;
 `tests/test_gen_tasks.py` fails if the file and its command stop matching).
+For the same reason `scripts/compare_seeds.py` gives other figures after that,
+unless it is run with `--workloads cpu_task,memory_task,matrix_task`.
 
 Then: Python and Go tests, `tests/run_tests.sh`, and a commit with the runs,
 the machine files, the logs, the profile and the model.
@@ -386,6 +395,6 @@ the machine files, the logs, the profile and the model.
   matrix) were made on Broadwell: their `lscpu` was lost. A control within
   10 % on a Broadwell VM makes it likely; `cpu_source` stays `declared`.
 - It does not say that greedy beats Round-Robin on random lots in general:
-  one lot is run. And most random lots cannot be run with Round-Robin on
-  these VMs at all (memory, see the step 4 spec).
+  one lot is run. The 100 lots of `scripts/compare_seeds.py` are predictions
+  (see `docs/specs/2026-11-16-seed-comparison-design.md`), not measures.
 - It does not measure cost.
