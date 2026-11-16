@@ -1,0 +1,60 @@
+[22:05:03] run 20261116-27-rr-2: 27 tasks from data/allocation_rr_large.csv, mode=concurrent, project=cloud-opti-93260
+[22:05:03] results in results/runs/20261116-27-rr-2/
+[22:05:03] launch T1: cpu_task --size 8000000 on cloudopt-vm1
+[22:05:03] launch T2: cpu_task --size 16000000 on cloudopt-vm2
+[22:05:03] launch T3: cpu_task --size 32000000 on cloudopt-vm3
+[22:05:03] launch T4: memory_task --size 512 on cloudopt-vm1
+[22:05:03] launch T5: memory_task --size 1024 on cloudopt-vm2
+[22:05:03] launch T6: memory_task --size 2048 on cloudopt-vm3
+[22:05:03] launch T7: matrix_task --size 1000 on cloudopt-vm1
+[22:05:03] launch T8: matrix_task --size 1500 on cloudopt-vm2
+[22:05:03] launch T9: matrix_task --size 2000 on cloudopt-vm3
+[22:05:03] launch T10: cpu_task --size 8000000 on cloudopt-vm1
+[22:05:03] launch T11: cpu_task --size 16000000 on cloudopt-vm2
+[22:05:03] launch T12: cpu_task --size 32000000 on cloudopt-vm3
+[22:05:03] launch T13: memory_task --size 512 on cloudopt-vm1
+[22:05:03] launch T14: memory_task --size 1024 on cloudopt-vm2
+[22:05:03] launch T15: memory_task --size 2048 on cloudopt-vm3
+[22:05:03] launch T16: matrix_task --size 1000 on cloudopt-vm1
+[22:05:03] launch T17: matrix_task --size 1500 on cloudopt-vm2
+[22:05:03] launch T18: matrix_task --size 2000 on cloudopt-vm3
+[22:05:03] launch T19: cpu_task --size 8000000 on cloudopt-vm1
+[22:05:03] launch T20: cpu_task --size 16000000 on cloudopt-vm2
+[22:05:03] launch T21: cpu_task --size 32000000 on cloudopt-vm3
+[22:05:03] launch T22: memory_task --size 512 on cloudopt-vm1
+[22:05:03] launch T23: memory_task --size 1024 on cloudopt-vm2
+[22:05:03] launch T24: memory_task --size 2048 on cloudopt-vm3
+[22:05:03] launch T25: matrix_task --size 1000 on cloudopt-vm1
+[22:05:04] launch T26: matrix_task --size 1500 on cloudopt-vm2
+[22:05:04] launch T27: matrix_task --size 2000 on cloudopt-vm3
+[22:05:04] all tasks launched, waiting for them to finish
+[T4] OK        cloudopt-vm1   memory_task  runtime=4.95s max_rss=527440kB attempts=1
+[T22] OK        cloudopt-vm1   memory_task  runtime=5.43s max_rss=527440kB attempts=1
+[T13] OK        cloudopt-vm1   memory_task  runtime=5.51s max_rss=527568kB attempts=1
+[T5] OK        cloudopt-vm2   memory_task  runtime=5.36s max_rss=1052368kB attempts=1
+[T23] OK        cloudopt-vm2   memory_task  runtime=5.44s max_rss=1052240kB attempts=1
+[T14] OK        cloudopt-vm2   memory_task  runtime=5.49s max_rss=1052368kB attempts=1
+[T25] OK        cloudopt-vm1   matrix_task  runtime=10.47s max_rss=26312kB attempts=1
+[T7] OK        cloudopt-vm1   matrix_task  runtime=10.81s max_rss=26312kB attempts=1
+[T16] OK        cloudopt-vm1   matrix_task  runtime=10.49s max_rss=26184kB attempts=1
+[T17] OK        cloudopt-vm2   matrix_task  runtime=16.06s max_rss=55624kB attempts=1
+[T8] OK        cloudopt-vm2   matrix_task  runtime=16.08s max_rss=55496kB attempts=1
+[T26] OK        cloudopt-vm2   matrix_task  runtime=16.27s max_rss=55624kB attempts=1
+[T6] OK        cloudopt-vm3   memory_task  runtime=20.63s max_rss=2104272kB attempts=1
+[T1] OK        cloudopt-vm1   cpu_task     runtime=21.26s max_rss=2504kB attempts=1
+[T10] OK        cloudopt-vm1   cpu_task     runtime=20.86s max_rss=2504kB attempts=1
+[T19] OK        cloudopt-vm1   cpu_task     runtime=20.69s max_rss=2344kB attempts=1
+[T24] OK        cloudopt-vm3   memory_task  runtime=21.00s max_rss=2102224kB attempts=1
+[T15] OK        cloudopt-vm3   memory_task  runtime=21.15s max_rss=2102224kB attempts=1
+[T11] OK        cloudopt-vm2   cpu_task     runtime=30.42s max_rss=2216kB attempts=1
+[T20] OK        cloudopt-vm2   cpu_task     runtime=30.66s max_rss=2344kB attempts=1
+[T2] OK        cloudopt-vm2   cpu_task     runtime=31.25s max_rss=2248kB attempts=1
+[T18] OK        cloudopt-vm3   matrix_task  runtime=73.27s max_rss=96712kB attempts=1
+[T9] OK        cloudopt-vm3   matrix_task  runtime=73.60s max_rss=96712kB attempts=1
+[T27] OK        cloudopt-vm3   matrix_task  runtime=73.57s max_rss=96584kB attempts=1
+[T12] OK        cloudopt-vm3   cpu_task     runtime=144.53s max_rss=2504kB attempts=1
+[T21] OK        cloudopt-vm3   cpu_task     runtime=144.25s max_rss=2472kB attempts=1
+[T3] OK        cloudopt-vm3   cpu_task     runtime=146.05s max_rss=2248kB attempts=1
+[22:07:33] All 27 tasks have finished: 27 OK, 0 not OK
+    OK         27
+[22:07:33] results: results/runs/20261116-27-rr-2/results.csv

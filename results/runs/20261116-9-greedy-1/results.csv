@@ -1,0 +1,10 @@
+run_id,mode,task_id,workload,size,vm,zone,machine_type,host,status,exit_code,attempts,submit_ts,start_ts,end_ts,runtime_s,max_rss_kb,wall_s
+20261116-9-greedy-1,concurrent,T1,cpu_task,8000000,cloudopt-vm2,europe-west1-b,e2-highcpu-4,cloudopt-vm2,OK,0,1,1794862592.709,1794862595.277,1794862605.336,10.05,2376,13.190
+20261116-9-greedy-1,concurrent,T2,cpu_task,16000000,cloudopt-vm3,europe-west1-b,e2-highmem-2,cloudopt-vm3,OK,0,1,1794862592.714,1794862595.350,1794862615.150,19.79,2344,22.941
+20261116-9-greedy-1,concurrent,T3,cpu_task,32000000,cloudopt-vm1,europe-west1-b,e2-standard-2,cloudopt-vm1,OK,0,1,1794862592.721,1794862594.954,1794862645.492,50.53,2248,53.252
+20261116-9-greedy-1,concurrent,T4,memory_task,512,cloudopt-vm3,europe-west1-b,e2-highmem-2,cloudopt-vm3,OK,0,1,1794862592.729,1794862595.106,1794862596.776,1.65,527540,4.654
+20261116-9-greedy-1,concurrent,T5,memory_task,1024,cloudopt-vm3,europe-west1-b,e2-highmem-2,cloudopt-vm3,OK,0,1,1794862592.734,1794862595.459,1794862598.179,2.71,1052368,6.023
+20261116-9-greedy-1,concurrent,T6,memory_task,2048,cloudopt-vm2,europe-west1-b,e2-highcpu-4,cloudopt-vm2,OK,0,1,1794862592.743,1794862595.306,1794862601.050,5.73,2102196,8.886
+20261116-9-greedy-1,concurrent,T7,matrix_task,1000,cloudopt-vm2,europe-west1-b,e2-highcpu-4,cloudopt-vm2,OK,0,1,1794862592.748,1794862595.401,1794862598.916,3.50,26184,6.761
+20261116-9-greedy-1,concurrent,T8,matrix_task,1500,cloudopt-vm2,europe-west1-b,e2-highcpu-4,cloudopt-vm2,OK,0,1,1794862592.757,1794862595.345,1794862603.739,8.38,55496,11.611
+20261116-9-greedy-1,concurrent,T9,matrix_task,2000,cloudopt-vm2,europe-west1-b,e2-highcpu-4,cloudopt-vm2,OK,0,1,1794862592.769,1794862595.293,1794862612.235,16.93,96424,19.943

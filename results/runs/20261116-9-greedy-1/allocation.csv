@@ -1,0 +1,10 @@
+task_id,workload,size,vm,predicted_runtime_s,predicted_rss_kb
+T1,cpu_task,8000000,cloudopt-vm2,7.20,2322
+T2,cpu_task,16000000,cloudopt-vm3,19.20,2352
+T3,cpu_task,32000000,cloudopt-vm1,49.70,2382
+T4,memory_task,512,cloudopt-vm3,0.90,527871
+T5,memory_task,1024,cloudopt-vm3,1.78,1053423
+T6,memory_task,2048,cloudopt-vm2,3.41,2102219
+T7,matrix_task,1000,cloudopt-vm2,1.73,26711
+T8,matrix_task,1500,cloudopt-vm2,6.08,55713
+T9,matrix_task,2000,cloudopt-vm2,14.84,93861

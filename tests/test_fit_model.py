@@ -326,13 +326,18 @@ class RealData(unittest.TestCase):
         rss_kb = float(r["c"]) * 2048 ** float(r["k"])
         self.assertAlmostEqual(rss_kb / 2102164, 1.0, delta=0.01)
 
-    def test_sort_task_reference_is_highmem_and_standard_is_assumed(self):
+    def test_sort_task_reference_is_highmem_and_standard_is_measured(self):
+        # Until the GCP session of 16/11/2026 sort_task had never run on
+        # e2-standard-2 and its factor was 1.0 "assumed". Two sizes were
+        # measured that day (run 20261116-profile-e2std2): 2 % faster than
+        # the reference machine.
         self.assertEqual(row_of(self.rows, "sort_task", "e2-highmem-2")["factor_source"], "reference")
         self.assertEqual(row_of(self.rows, "sort_task", "e2-highcpu-4")["factor_source"], "measured")
         r = row_of(self.rows, "sort_task", "e2-standard-2")
-        self.assertEqual((r["factor_source"], float(r["factor"])), ("assumed", 1.0))
-        self.assertIn("WARNING", self.report)
-        self.assertIn("sort_task on e2-standard-2", self.report)
+        self.assertEqual(r["factor_source"], "measured")
+        self.assertTrue(0.96 < float(r["factor"]) < 0.99, r["factor"])
+        self.assertNotIn("assumed", [row["factor_source"] for row in self.rows])
+        self.assertNotIn("WARNING", self.report)
 
     def test_cpu_of_the_lost_vm_is_declared_not_verified(self):
         for r in self.rows:

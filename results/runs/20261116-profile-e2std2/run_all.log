@@ -1,0 +1,16 @@
+[21:53:59] run 20261116-profile-e2std2: 9 tasks from data/allocation_profile_e2std2.csv, mode=queue, project=cloud-opti-93260
+[21:53:59] results in results/runs/20261116-profile-e2std2/
+[21:53:59] launch queue of cloudopt-vm1 (9 tasks)
+[21:53:59] all tasks launched, waiting for them to finish
+[C1] OK        cloudopt-vm1   cpu_task     runtime=7.05s max_rss=2248kB attempts=1
+[C2] OK        cloudopt-vm1   cpu_task     runtime=7.02s max_rss=2504kB attempts=1
+[C3] OK        cloudopt-vm1   cpu_task     runtime=7.09s max_rss=2248kB attempts=1
+[S1] OK        cloudopt-vm1   sort_task    runtime=2.48s max_rss=127764kB attempts=1
+[S2] OK        cloudopt-vm1   sort_task    runtime=2.53s max_rss=127764kB attempts=1
+[S3] OK        cloudopt-vm1   sort_task    runtime=2.49s max_rss=127892kB attempts=1
+[S4] OK        cloudopt-vm1   sort_task    runtime=10.79s max_rss=503160kB attempts=1
+[S5] OK        cloudopt-vm1   sort_task    runtime=10.67s max_rss=503060kB attempts=1
+[S6] OK        cloudopt-vm1   sort_task    runtime=10.66s max_rss=503188kB attempts=1
+[21:55:17] All 9 tasks have finished: 9 OK, 0 not OK
+    OK         9
+[21:55:17] results: results/runs/20261116-profile-e2std2/results.csv

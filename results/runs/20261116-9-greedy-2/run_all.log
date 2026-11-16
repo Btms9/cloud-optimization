@@ -1,0 +1,24 @@
+[21:57:27] run 20261116-9-greedy-2: 9 tasks from data/allocation_greedy.csv, mode=concurrent, project=cloud-opti-93260
+[21:57:27] results in results/runs/20261116-9-greedy-2/
+[21:57:27] launch T1: cpu_task --size 8000000 on cloudopt-vm2
+[21:57:27] launch T2: cpu_task --size 16000000 on cloudopt-vm3
+[21:57:27] launch T3: cpu_task --size 32000000 on cloudopt-vm1
+[21:57:27] launch T4: memory_task --size 512 on cloudopt-vm3
+[21:57:27] launch T5: memory_task --size 1024 on cloudopt-vm3
+[21:57:27] launch T6: memory_task --size 2048 on cloudopt-vm2
+[21:57:27] launch T7: matrix_task --size 1000 on cloudopt-vm2
+[21:57:27] launch T8: matrix_task --size 1500 on cloudopt-vm2
+[21:57:27] launch T9: matrix_task --size 2000 on cloudopt-vm2
+[21:57:27] all tasks launched, waiting for them to finish
+[T4] OK        cloudopt-vm3   memory_task  runtime=1.74s max_rss=527440kB attempts=1
+[T7] OK        cloudopt-vm2   matrix_task  runtime=3.00s max_rss=26184kB attempts=1
+[T5] OK        cloudopt-vm3   memory_task  runtime=3.01s max_rss=1052368kB attempts=1
+[T6] OK        cloudopt-vm2   memory_task  runtime=5.08s max_rss=2102096kB attempts=1
+[T8] OK        cloudopt-vm2   matrix_task  runtime=9.81s max_rss=55368kB attempts=1
+[T1] OK        cloudopt-vm2   cpu_task     runtime=10.26s max_rss=2376kB attempts=1
+[T9] OK        cloudopt-vm2   matrix_task  runtime=15.63s max_rss=96456kB attempts=1
+[T2] OK        cloudopt-vm3   cpu_task     runtime=19.81s max_rss=2376kB attempts=1
+[T3] OK        cloudopt-vm1   cpu_task     runtime=50.24s max_rss=2248kB attempts=1
+[21:58:19] All 9 tasks have finished: 9 OK, 0 not OK
+    OK         9
+[21:58:19] results: results/runs/20261116-9-greedy-2/results.csv
