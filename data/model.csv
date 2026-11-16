@@ -1,0 +1,13 @@
+workload,machine_type,a,b,factor,c,k,size_min,size_max,factor_source,cpu_model,cpu_source
+cpu_task,e2-standard-2,1.13498057e-09,1.41787298,1.000000,1732.49611,0.0184282471,4000000,32000000,reference,Intel(R) Xeon(R) CPU @ 2.20GHz,declared
+cpu_task,e2-highmem-2,1.13498057e-09,1.41787298,1.032218,1732.49611,0.0184282471,4000000,32000000,measured,Intel(R) Xeon(R) CPU @ 2.20GHz,lscpu
+cpu_task,e2-highcpu-4,1.13498057e-09,1.41787298,1.034042,1732.49611,0.0184282471,4000000,32000000,measured,Intel(R) Xeon(R) CPU @ 2.20GHz,lscpu
+memory_task,e2-standard-2,0.00166183978,0.987593951,1.000000,1051.60498,0.996827669,256,4096,reference,Intel(R) Xeon(R) CPU @ 2.20GHz,declared
+memory_task,e2-highmem-2,0.00166183978,0.987593951,1.143030,1051.60498,0.996827669,256,4096,measured,Intel(R) Xeon(R) CPU @ 2.20GHz,lscpu
+memory_task,e2-highcpu-4,0.00166183978,0.987593951,1.102815,1051.60498,0.996827669,256,4096,measured,Intel(R) Xeon(R) CPU @ 2.20GHz,lscpu
+matrix_task,e2-standard-2,7.54198946e-10,3.10198421,1.000000,0.0971359905,1.81310282,600,2000,reference,Intel(R) Xeon(R) CPU @ 2.20GHz,declared
+matrix_task,e2-highmem-2,7.54198946e-10,3.10198421,1.072432,0.0971359905,1.81310282,600,2000,measured,Intel(R) Xeon(R) CPU @ 2.20GHz,lscpu
+matrix_task,e2-highcpu-4,7.54198946e-10,3.10198421,1.133242,0.0971359905,1.81310282,600,2000,measured,Intel(R) Xeon(R) CPU @ 2.20GHz,lscpu
+sort_task,e2-standard-2,6.84009419e-08,1.05107192,1.000000,0.0114552458,0.978996898,4000000,128000000,assumed,Intel(R) Xeon(R) CPU @ 2.20GHz,declared
+sort_task,e2-highmem-2,6.84009419e-08,1.05107192,1.000000,0.0114552458,0.978996898,4000000,128000000,reference,Intel(R) Xeon(R) CPU @ 2.20GHz,lscpu
+sort_task,e2-highcpu-4,6.84009419e-08,1.05107192,0.982704,0.0114552458,0.978996898,4000000,128000000,measured,Intel(R) Xeon(R) CPU @ 2.20GHz,lscpu
