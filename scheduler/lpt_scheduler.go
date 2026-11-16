@@ -1,76 +1,38 @@
-// lpt_scheduler.go - our own scheduler: "longest task first, on the least
-// loaded VM" (LPT, Longest Processing Time first), with a memory check.
-//
-// It runs on the controller (the Mac) and only writes a CSV file, exactly like
-// the Round-Robin baseline; run_all.sh (TD3) executes the allocation.
+// lpt_scheduler.go - our scheduler: "longest task first, on the least loaded
+// VM" (LPT, Longest Processing Time first), with a memory check. It runs on the
+// controller (the Mac) and only writes allocation.csv (task_id,workload,size,vm);
+// run_all.sh executes it. Go standard library only.
 //
 // Build: go build -o bin/lpt_scheduler scheduler/lpt_scheduler.go
+// Table mode (one measured runtime per task, the same on every VM):
 //
-// Two modes, same algorithm, same output format:
+//	./bin/lpt_scheduler data/tasks.csv data/machines.csv data/benchmark_local.csv data/allocation_lpt.csv
 //
-//	table mode (measured runtimes, the same on every VM):
-//	  ./bin/lpt_scheduler data/tasks.csv data/machines.csv data/benchmark_local.csv data/allocation_lpt.csv
-//	model mode (runtimes predicted for the CPU platform of each VM, see ml/runtime_model.go):
-//	  ./bin/lpt_scheduler -model data/runtime_model.csv -platforms data/vm_platforms_TAG.csv \
-//	      data/tasks.csv data/machines.csv data/allocation_ml.csv
+// Model mode (runtime predicted for the CPU of each VM, see ml/runtime_model.go):
 //
-// Objective: finish the whole set of tasks as early as possible (minimize the
-// makespan), without ever putting more memory on a VM than it can hold.
+//	./bin/lpt_scheduler -model data/runtime_model.csv -platforms data/vm_platforms_TAG.csv \
+//	    data/tasks.csv data/machines.csv data/allocation_ml.csv
 //
-// Inputs:
+// Objective: finish all the tasks as early as possible (minimize the makespan).
+// Two rules:
 //
-//	tasks.csv     task_id,workload,size                    what to run
-//	machines.csv  vm,...,vcpus,memory_gb,...               the VMs (other columns ignored)
-//	profile.csv   workload,size,run,runtime_s,max_rss_kb   benchmark.sh format, one row
-//	              per run: we use the mean runtime and the largest RSS of each workload/size
+//  1. a VM with V vCPUs runs V single-threaded tasks at once, so its LOAD is
+//     (sum of the runtimes of its tasks) / V;
+//  2. the memory of the tasks of a VM adds up and must stay below 85 % of its RAM.
 //
-// Output: allocation.csv with task_id,workload,size,vm (the TD3 format).
+// Algorithm (greedy, no solver):
 //
-// The model, in two rules:
+//  1. sort the tasks from the longest to the shortest;
+//  2. give each one to the best VM where it fits in memory: the VM whose load
+//     is the smallest after adding it (table mode, -rule load), or whose
+//     estimated finish time max(load, longest task) is the smallest (model
+//     mode, -rule finish). On a tie, the first VM of machines.csv.
 //
-//  1. Our tasks are single-threaded, so a VM with V vCPUs does V seconds of
-//     work per second. Its LOAD is: total work of its tasks / V (the seconds
-//     of work waiting on each of its vCPUs).
-//  2. The tasks of a VM run at the same time, so their memory adds up: the sum
-//     of their max RSS must stay below 85 % of the VM memory.
-//
-// The algorithm (a greedy heuristic, no solver):
-//
-//  1. sort the tasks from the longest to the shortest (estimated runtime);
-//  2. take them one by one and give each one to the VM whose load is the
-//     smallest AFTER adding the task, among the VMs where it fits in memory
-//     (if two VMs are equal, the first one in machines.csv).
-//
-// Big tasks are placed first, while the VMs are still empty, so they end up
-// on different VMs; small tasks then fill the gaps. A VM with 4 vCPUs
-// naturally receives about twice as much work as a VM with 2 vCPUs.
-// Same inputs always give the same allocation.
-//
-// The finish time of a VM is estimated as max(load, longest task of the VM),
-// since a VM cannot finish before its longest task, and the makespan as the
-// largest finish time. The same estimate is printed for Round-Robin.
-//
-// Model mode (-model, -platforms). The runtime of a task is no longer the
-// same on every VM: it is predicted for the CPU platform of each VM,
-// runtime = a * size^b * speed_factor(platform), and the memory as
-// c * size^d. Two changes follow, both reduce to the table mode when all
-// VMs have the same speed:
-//
-//   - "longest first" uses the mean of the predicted runtimes over the VMs;
-//   - with -rule finish (the default in model mode), a task goes to the VM
-//     whose estimated finish time max(load, longest task) is the smallest
-//     after adding it (then the smallest load, then machines.csv order).
-//     The load alone is not enough when the speeds differ: a slow VM with 4
-//     vCPUs looks "light" (54 s / 4 = 13.5 s) while it would need 54 s to
-//     run the task. -rule load keeps the rule of the table mode.
-//
-// A platform that the model has never seen (or a VM missing from the
-// platforms file) gets the speed factor 1, that of the reference platform,
-// with a warning. This is the same idea as list scheduling with earliest
-// finish time on heterogeneous machines (HEFT, Topcuoglu et al. 2002), for
-// independent tasks.
-//
-// Go standard library only.
+// Model mode: runtime = a * size^b * speed_factor(CPU of the VM), memory =
+// c * size^d; "longest" means the mean predicted runtime over the VMs. The
+// finish time is needed because the load alone hides a slow VM: 54 s of work
+// on a slow 4-vCPU VM is only 13.5 s of load, but the task still lasts 54 s.
+// A CPU the model has never seen gets the speed factor 1, with a warning.
 package main
 
 import (
@@ -167,19 +129,14 @@ func better(v, best *VM, t Task, rule string) bool {
 	return v.LoadWith(t) < best.LoadWith(t)-epsilon
 }
 
-// schedule is the algorithm with the rule of the table mode.
-func schedule(tasks []Task, vms []*VM) (map[string]string, error) {
-	return scheduleWith(tasks, vms, ruleLoad)
-}
-
-// scheduleWith is the algorithm. It returns task_id -> VM name.
-func scheduleWith(tasks []Task, vms []*VM, rule string) (map[string]string, error) {
+// schedule is the algorithm. It returns task_id -> VM name.
+func schedule(tasks []Task, vms []*VM, rule string) (map[string]string, error) {
 	order := make([]Task, len(tasks))
 	copy(order, tasks)
 	// Step 1: longest first. SliceStable keeps the tasks.csv order on ties.
 	sort.SliceStable(order, func(a, b int) bool { return order[a].Runtime > order[b].Runtime })
 
-	// Step 2: each task goes to the least loaded VM where it fits in memory.
+	// Step 2: each task goes to the best VM where it fits in memory.
 	assignment := make(map[string]string)
 	for _, t := range order {
 		var best *VM
@@ -334,7 +291,6 @@ func loadTasks(rows [][]string, profile map[string]Task) ([]Task, error) {
 type ModelRow struct {
 	Platform, Role           string
 	A, B, Factor, RSSC, RSSD float64
-	MinSize, MaxSize         float64 // sizes measured on this platform
 }
 
 // Model is the trained model: workload -> platform -> row, and the reference row of each workload.
@@ -347,7 +303,7 @@ type Model struct {
 func loadModel(rows [][]string) (*Model, error) {
 	m := &Model{rows: map[string]map[string]ModelRow{}, reference: map[string]ModelRow{}, warned: map[string]bool{}}
 	for i, r := range rows {
-		var v [7]float64
+		var v [5]float64
 		for k := range v {
 			x, err := strconv.ParseFloat(r[3+k], 64)
 			if err != nil || x < 0 || math.IsNaN(x) || math.IsInf(x, 0) {
@@ -355,7 +311,7 @@ func loadModel(rows [][]string) (*Model, error) {
 			}
 			v[k] = x
 		}
-		row := ModelRow{Platform: r[1], Role: r[2], A: v[0], B: v[1], Factor: v[2], RSSC: v[3], RSSD: v[4], MinSize: v[5], MaxSize: v[6]}
+		row := ModelRow{Platform: r[1], Role: r[2], A: v[0], B: v[1], Factor: v[2], RSSC: v[3], RSSD: v[4]}
 		if r[0] == "" || row.Platform == "" || row.A <= 0 || row.Factor <= 0 || row.RSSC <= 0 {
 			return nil, fmt.Errorf("model, data row %d: need a workload, a platform, a > 0, speed_factor > 0 and rss_c > 0", i+1)
 		}
@@ -390,22 +346,12 @@ func (m *Model) warnOnce(format string, args ...interface{}) {
 // platform. A platform without a speed factor gets factor 1 (the speed of the
 // reference platform), with a warning: never an error.
 func (m *Model) runtime(w string, n float64, platform, vm string) float64 {
-	ref := m.reference[w]
 	row, ok := m.rows[w][platform]
-	switch {
-	case platform == "":
-		m.warnOnce("VM %s is not in the platforms file: its CPU is unknown, speed factor 1 (the speed of %s)", vm, ref.Platform)
-		row = ref
-		row.Factor = 1
-	case !ok:
+	if !ok {
+		row = m.reference[w]
 		m.warnOnce("platform %q (VM %s) has no speed factor for %s: factor 1 is used (the speed of %s). "+
-			"Measure it with a MODE=queue run and retrain with scripts/ml_train.sh", platform, vm, w, ref.Platform)
-		row = ref
+			"Measure it with a MODE=queue run and retrain with scripts/ml_train.sh", platform, vm, w, row.Platform)
 		row.Factor = 1
-	}
-	if n < row.MinSize || n > row.MaxSize {
-		m.warnOnce("%s size %.0f is outside the sizes measured on %s (%.0f to %.0f): the prediction is an extrapolation",
-			w, n, row.Platform, row.MinSize, row.MaxSize)
 	}
 	return row.A * math.Pow(n, row.B) * row.Factor
 }
@@ -428,7 +374,11 @@ func loadModelTasks(rows [][]string, model *Model, vms []*VM, platformOf map[str
 		t := Task{ID: id, Workload: workload, Size: size, OnVM: make([]float64, len(vms)),
 			RSSKB: int64(math.Ceil(ref.RSSC * math.Pow(n, ref.RSSD)))}
 		for i, v := range vms {
-			t.OnVM[i] = model.runtime(workload, n, platformOf[v.Name], v.Name)
+			platform, ok := platformOf[v.Name]
+			if !ok {
+				platform = "unknown: not in the platforms file"
+			}
+			t.OnVM[i] = model.runtime(workload, n, platform, v.Name)
 			t.Runtime += t.OnVM[i] / float64(len(vms)) // mean over the VMs: the order of the tasks
 		}
 		tasks = append(tasks, t)
@@ -472,49 +422,18 @@ func printPredictions(tasks []Task, vms []*VM, assignment map[string]string) {
 	}
 }
 
-// roundRobinPlan places the tasks like round_robin.go, to print the same
-// estimates for the baseline. It does not write anything.
-func roundRobinPlan(tasks []Task, machines []*VM) []*VM {
-	vms := make([]*VM, len(machines))
-	for i, m := range machines {
-		vms[i] = &VM{Name: m.Name, Index: m.Index, VCPUs: m.VCPUs, MemoryKB: m.MemoryKB}
-	}
-	for i, t := range tasks {
-		vms[i%len(vms)].Add(t)
-	}
-	return vms
-}
-
-// writeAllocation writes the allocation in the order of tasks.csv, through a
-// temporary file, so that a half-written CSV never exists.
+// writeAllocation writes the allocation, in the order of tasks.csv.
 func writeAllocation(path string, tasks []Task, assignment map[string]string) error {
+	rows := [][]string{{"task_id", "workload", "size", "vm"}}
+	for _, t := range tasks {
+		rows = append(rows, []string{t.ID, t.Workload, t.Size, assignment[t.ID]})
+	}
+	var b strings.Builder
+	csv.NewWriter(&b).WriteAll(rows)
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return fmt.Errorf("create output directory: %w", err)
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".lpt-allocation-*")
-	if err != nil {
-		return fmt.Errorf("create output: %w", err)
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-
-	w := csv.NewWriter(tmp)
-	w.Write([]string{"task_id", "workload", "size", "vm"})
-	for _, t := range tasks {
-		w.Write([]string{t.ID, t.Workload, t.Size, assignment[t.ID]})
-	}
-	w.Flush()
-	err = w.Error()
-	if closeErr := tmp.Close(); err == nil {
-		err = closeErr
-	}
-	if err == nil {
-		err = os.Chmod(tmpName, 0644)
-	}
-	if err == nil {
-		err = os.Rename(tmpName, path)
-	}
-	if err != nil {
+	if err := os.WriteFile(path, []byte(b.String()), 0644); err != nil {
 		return fmt.Errorf("write output: %w", err)
 	}
 	return nil
@@ -554,8 +473,8 @@ func run(args []string) error {
 	if (!modelMode && len(pos) != 4) || (modelMode && len(pos) != 3) {
 		return fmt.Errorf("%s", usage)
 	}
-	if *platformsPath != "" && !modelMode {
-		return fmt.Errorf("-platforms is only used with -model\n%s", usage)
+	if modelMode != (*platformsPath != "") {
+		return fmt.Errorf("-model and -platforms go together\n%s", usage)
 	}
 	if *rule == "" {
 		*rule = ruleLoad
@@ -594,8 +513,7 @@ func run(args []string) error {
 			return err
 		}
 	} else {
-		modelRows, err := readCSV(*modelPath, []string{"workload", "platform", "role", "a", "b", "speed_factor",
-			"rss_c", "rss_d", "min_size", "max_size"})
+		modelRows, err := readCSV(*modelPath, []string{"workload", "platform", "role", "a", "b", "speed_factor", "rss_c", "rss_d"})
 		if err != nil {
 			return err
 		}
@@ -603,21 +521,15 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		platformOf := map[string]string{}
-		if *platformsPath == "" {
-			fmt.Fprintln(warnings, "warning: no -platforms file: the CPU of every VM is unknown (speed factor 1)")
-		} else {
-			platformRows, err := readCSV(*platformsPath, []string{"vm", "cpu_model"})
-			if err != nil {
-				return err
-			}
-			platformOf = loadPlatforms(platformRows)
+		platformRows, err := readCSV(*platformsPath, []string{"vm", "cpu_model"})
+		if err != nil {
+			return err
 		}
-		if tasks, err = loadModelTasks(taskRows, model, vms, platformOf); err != nil {
+		if tasks, err = loadModelTasks(taskRows, model, vms, loadPlatforms(platformRows)); err != nil {
 			return err
 		}
 	}
-	assignment, err := scheduleWith(tasks, vms, *rule)
+	assignment, err := schedule(tasks, vms, *rule)
 	if err != nil {
 		return err
 	}
@@ -631,11 +543,15 @@ func run(args []string) error {
 		printPredictions(tasks, vms, assignment)
 	}
 	fmt.Printf("Scheduled %d tasks across %d VMs: %s\n", len(tasks), len(vms), output)
-	ours := printPlan("Our allocation (estimates):", vms)
-	rr := printPlan("Round-Robin, same estimates:", roundRobinPlan(tasks, vms))
-	// No allocation can finish before its longest task, nor before all the work
-	// is spread perfectly over all the vCPUs: the larger of the two is a lower bound.
-	// With different speeds, each task counts with its runtime on its fastest VM.
+	makespan := printPlan("Our allocation (estimates):", vms)
+	fmt.Printf("Estimated makespan %.2fs, lower bound %.2fs (no allocation can do better)\n", makespan, lowerBound(tasks, vms))
+	return nil
+}
+
+// lowerBound: no allocation can finish before its longest task, nor before
+// all the work is spread perfectly over all the vCPUs. Each task counts with
+// its runtime on its fastest VM.
+func lowerBound(tasks []Task, vms []*VM) float64 {
 	longest, total, cpus := 0.0, 0.0, 0
 	for _, t := range tasks {
 		fastest := math.Inf(1)
@@ -648,10 +564,7 @@ func run(args []string) error {
 	for _, v := range vms {
 		cpus += v.VCPUs
 	}
-	bound := math.Max(longest, total/float64(cpus))
-	fmt.Printf("Estimated makespan: ours %.2fs, Round-Robin %.2fs, lower bound %.2fs (no allocation can do better)\n",
-		ours, rr, bound)
-	return nil
+	return math.Max(longest, total/float64(cpus))
 }
 
 func main() {

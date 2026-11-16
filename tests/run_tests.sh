@@ -344,7 +344,7 @@ if command -v go > /dev/null 2>&1; then
         pass "model mode: same 4-column allocation, runs end to end with run_all.sh" || fail "model mode end to end: $(cat "$T/ml.txt")"
     printf 'vm,cpu_model\ncloudopt-vm1,Unknown CPU [1/1]\n' > "$T/pu.csv"
     "$T/lpt" -model "$MODEL" -platforms "$T/pu.csv" "$FIX/tasks_small.csv" data/machines.csv "$T/alloc_u.csv" > /dev/null 2> "$T/u.txt" &&
-        grep -q 'platform "Unknown CPU \[1/1\]" (VM cloudopt-vm1) has no speed factor' "$T/u.txt" && grep -q "cloudopt-vm2 is not in the platforms file" "$T/u.txt" &&
+        grep -q 'platform "Unknown CPU \[1/1\]" (VM cloudopt-vm1) has no speed factor' "$T/u.txt" && grep -q 'platform "unknown: not in the platforms file" (VM cloudopt-vm2)' "$T/u.txt" &&
         pass "unknown platform or VM: warning, factor 1, allocation written" || fail "unknown platform: $(cat "$T/u.txt")"
     unset TRAINING MODEL VALIDATION MIN_RUNTIME
 else

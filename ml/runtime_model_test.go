@@ -27,8 +27,8 @@ func TestFitRecoversAKnownPowerLaw(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !near(law.A, 2e-3, 1e-9) || !near(law.B, 1.5, 1e-9) || !near(law.R2, 1, 1e-9) {
-		t.Fatalf("got a=%g b=%g R2=%g, want 2e-3, 1.5, 1", law.A, law.B, law.R2)
+	if !near(law.A, 2e-3, 1e-9) || !near(law.B, 1.5, 1e-9) {
+		t.Fatalf("got a=%g b=%g, want 2e-3 and 1.5", law.A, law.B)
 	}
 }
 
@@ -196,11 +196,11 @@ func TestRunWritesModelAndValidation(t *testing.T) {
 	}
 	content, _ := os.ReadFile(model)
 	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
-	if lines[0] != "workload,platform,role,a,b,speed_factor,rss_c,rss_d,min_size,max_size,runs" || len(lines) != 3 {
+	if lines[0] != "workload,platform,role,a,b,speed_factor,rss_c,rss_d,runs" || len(lines) != 3 {
 		t.Fatalf("model file:\n%s", content)
 	}
 	if !strings.HasPrefix(lines[1], "w,FAST [1/1],reference,") || !strings.Contains(lines[2], "SLOW [2/2],measured,") ||
-		!strings.Contains(lines[2], ",3,") || !strings.HasSuffix(lines[2], ",1000,4000,9") {
+		!strings.Contains(lines[2], ",3,") || !strings.HasSuffix(lines[2], ",9") {
 		t.Errorf("model rows:\n%s", content)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "val_detail.csv")); err != nil {

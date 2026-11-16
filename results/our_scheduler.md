@@ -91,9 +91,10 @@ largest tasks, on the same 2-vCPU VM.
 ## 6. Expected gain (estimates from the model)
 
 A VM cannot finish before its longest task, so the scheduler estimates the finish time of a VM
-as max(load, longest task), and the makespan as the largest finish time. It prints the same
-estimate for Round-Robin, and a lower bound that no allocation can beat: the largest of the
-longest task and (total work / total number of vCPUs).
+as max(load, longest task), and the makespan as the largest finish time. It also prints a lower
+bound that no allocation can beat: the largest of the longest task and (total work / total
+number of vCPUs). The Round-Robin column below was computed with the same estimates when
+Round-Robin was still our reference (TD4); the scheduler no longer prints it.
 
 | Scenario | Ours | Round-Robin | Lower bound |
 |---|---|---|---|

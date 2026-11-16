@@ -169,9 +169,10 @@ platform, next to two references:
 - **spread**: the run-to-run variability, (max - min) / mean over the 3 runs of a size. No
   model can be much more precise than this noise.
 
-The smallest and largest sizes are extrapolations (the law is learned on the sizes between),
-so we also give the MAPE of the sizes inside the measured range. Files:
-results/ml_validation.csv (summary) and results/ml_validation_detail.csv (one row per check).
+We also give the same error for the memory prediction, used by the 85 % rule. Files:
+results/ml_validation.csv (summary) and results/ml_validation_detail.csv (one row per check:
+predicted and measured runtime, which is what we plot). When the smallest or the largest size
+is removed, the model has to extrapolate, so these checks are the hardest ones.
 
 ### 5.3 Results with the data we have today (TD1 + TD2)
 
@@ -183,7 +184,7 @@ results/ml_validation.csv (summary) and results/ml_validation_detail.csv (one ro
 | memory_task | Intel Broadwell | 1.792 | 20.1 % | 13.4 % | 45.8 % |
 | all | | | | 3.8 % (11 checks) | 9.6 % |
 
-Inside the measured range the MAPE is 0.8 %. The speed factor is what makes the model usable on
+The speed factor is what makes the model usable on
 another processor: on Broadwell, the error goes from 45.8 % to 13.4 %, which is close to the
 20 % run-to-run spread of that VM in TD2. These numbers come from only 3 sizes per workload, so
 they are a first check; the profiling campaign gives 5 sizes on every GCP platform. The target
@@ -237,9 +238,7 @@ to measure the effect of each change separately.
 
 | Case | Behaviour |
 |---|---|
-| Platform never measured for a workload | warning, speed factor 1 (the speed of the reference platform) |
-| VM missing from the platforms file | warning, speed factor 1 |
-| Size outside the sizes measured on that platform | warning: the prediction is an extrapolation |
+| CPU never measured for a workload, or VM missing from the platforms file | warning, speed factor 1 (the speed of the reference platform) |
 | Workload not in the model at all | error, no file written (we cannot guess a size law) |
 
 A warning is printed once, and the allocation is still written: an unknown processor must not
@@ -295,7 +294,8 @@ ablation, per series; MAPE of the model trained on the profiling campaign; platf
   period.
 - **New platforms** get the factor 1 until they are profiled: the prediction can then be wrong
   by a factor of 4 (the warning says so).
-- **Extrapolation.** A size far outside the measured range is a guess; the scheduler warns.
+- **Extrapolation.** A size far outside the measured sizes is a guess. The profiling campaign
+  covers the sizes of our task sets, so we do not extrapolate in our experiments.
 - **The model is calibrated in the session.** We profile the VMs of the session before using
   the model. This is honest for a platform that is new for the model, but the gain shown on GCP
   is then the gain with a calibrated model. The learning loop makes later sessions on known
