@@ -3,3 +3,4 @@ bin/round_robin_scheduler
 bin/lpt_scheduler
 __pycache__/
 bin/greedy_scheduler
+bin/predict_makespan
