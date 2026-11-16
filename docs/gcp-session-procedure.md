@@ -9,7 +9,8 @@ were made by Claude.
 Rehearsed on 16/11 in WSL with the fake gcloud of `tests/mock` (each "VM" is a
 local folder): steps 0 to 4, 6 and 7 ran as written, including the replacement
 of one VM and the conversion of the `sort_task` rows. Not rehearsed: the
-27-task runs (they would really allocate 11 GB on the PC) and anything that
+27-task runs and the runs of the generated lot (each would really allocate
+11 GB on the PC; only their validation of step 0 was run), and anything that
 depends on real VMs (SSH, CPU, timings).
 
 ## What the session must answer
@@ -20,6 +21,9 @@ depends on real VMs (SSH, CPU, timings).
    model 79, Broadwell)? Without it, no prediction can be checked.
 3. Round-Robin against greedy, **same VMs, same session**: is the measured
    makespan of greedy lower, and how far is each prediction from the measure?
+4. The same question on a lot that nobody wrote by hand: 18 random tasks
+   (`data/tasks_gen_s1.csv`), whose sizes were never profiled. It is the only
+   test of the model between its measured points.
 
 ## Decided before looking at the results
 
@@ -47,10 +51,26 @@ Predicted values (computed on 16/11 with `bin/predict_makespan`, efficiency 0.63
 | 9 tasks | `allocation_greedy.csv` | 49.7 s | 18.0 s | 21.0 s | 49.7 s (-20.3 %) |
 | 27 tasks (`tasks_large.csv`) | `allocation_rr_large.csv` | 22.1 s | 32.2 s | 164.0 s | 164.0 s |
 | 27 tasks | `allocation_greedy_large.csv` | 76.6 s | 74.8 s | 76.1 s | 76.6 s (-53.3 %) |
+| 18 random tasks (`tasks_gen_s1.csv`) | `allocation_rr_gen_s1.csv` | 27.3 s | 15.5 s | 31.6 s | 31.6 s |
+| 18 random tasks | `allocation_greedy_gen_s1.csv` | 22.6 s | 22.3 s | 23.0 s | 23.0 s (-27.2 %) |
 
 With 9 tasks greedy cannot do better than 49.7 s: it is `cpu_task 32000000`
 alone on a VM (the lower bound). The 27 tasks are the real test of the sharing
 estimate.
+
+**The generated lot** was fixed on 16/11, before any measure:
+`python scripts/gen_tasks.py --seed 1 --count 18 --workloads cpu_task,memory_task,matrix_task --out data/tasks_gen_s1.csv`.
+Seed 1 is the first seed, not a chosen one, and 18 tasks is our call (between
+the two existing lots; about 30 s per run). The two allocations are the output
+of the unmodified schedulers on that file. Its lower bound is 20.4 s.
+For information, seeds 1 to 12 were looked at (predictions only, see the
+step 4 spec): no lot has both allocations under the memory limit. In 2 lots
+(seeds 3 and 11) greedy finds no allocation; in the 10 others Round-Robin puts
+more than the limit on `cloudopt-vm2` or `cloudopt-vm1`, and in 8 of them more
+than the VM really has (up to 9.5 GB predicted on the 4 GB VM). Seed 1 is one
+of the two lots (with seed 5) that Round-Robin should survive: the same
+situation as the 27 tasks (below). Had seed 1 been one of the 8, the lot would
+have needed a rule to choose it; it did not.
 
 ## Risks to know before starting
 
@@ -62,36 +82,81 @@ estimate.
   3346 MB predicted on the same VM and all 27 tasks passed. If a task is
   killed, the run is reported as it is (Round-Robin does not look at memory);
   it is not run again until it passes.
-- **One run per allocation proves little.** Each allocation runs twice.
+- **Same thing for Round-Robin on the generated lot**: 3190 MB predicted on
+  `cloudopt-vm2` (one `memory_task` of 3131 MB and five small tasks), under
+  what the VM has, above the limit of greedy. Same rule: reported as it is.
+- **One run per allocation proves little.** Each allocation runs twice. And
+  one random lot is one draw: it says nothing about random lots in general.
 - **The session is billed from step 1 to step 6**, about 0.30 USD per hour for
-  the three VMs. Planned: 45 minutes (about 0.25 USD). Whatever happens,
+  the three VMs. Planned: 50 minutes (about 0.25 USD). Whatever happens,
   step 6 is done before leaving; hard stop after 90 minutes.
 
-## Where to run it (to decide)
+## Controller: WSL Ubuntu on Youssef's PC (decided on 16/11)
 
-The orchestrator is Bash and must not be modified. Checked on 16/11 on
-Youssef's PC:
+The orchestrator is Bash and must not be modified. It cannot run from Git Bash
+on Windows (checked on 16/11): `validate_allocation.sh` and `deploy_all.sh`
+test `[ -x bin/cpu_task ]`, false there for a Linux binary, and gcloud for
+Windows uses PuTTY while the scripts pass OpenSSH options. The three previous
+sessions ran from Thomas's Mac; WSL has never been used as a controller, so
+the setup below is done and checked BEFORE the session day.
 
-- **Git Bash on Windows: not possible.** `validate_allocation.sh` and
-  `deploy_all.sh` test `[ -x bin/cpu_task ]`, false there for a Linux binary
-  (seen: "bin/cpu_task not found or not executable"), and gcloud for Windows
-  uses PuTTY while the scripts pass OpenSSH options.
-- **A. Thomas's Mac** - the controller of the three previous sessions. Needs
-  the `profiling` branch on that Mac (a push, to be decided by Youssef).
-- **B. WSL Ubuntu on Youssef's PC** - never used as a controller. Needs, once:
-  the gcloud CLI for Linux installed inside WSL (official page "Install the
-  gcloud CLI", Debian/Ubuntu section; `command -v gcloud` must then NOT start
-  with `/mnt/c/`: today WSL only sees the Windows one), `gcloud auth login`,
-  and a copy of the repository with Linux line endings:
+### One-time setup (free: no VM, no GCP resource)
 
-  ```bash
-  git clone -c core.autocrlf=false --branch profiling \
-      /mnt/c/Users/Youssef/cloud-optimization ~/cloud-optimization-session
-  cd ~/cloud-optimization-session
-  ```
+Typed in the Ubuntu terminal of WSL (`wsl -d Ubuntu`), not in Git Bash. State
+on 16/11: Ubuntu 26.04, `curl`, `gpg`, `ssh`, `git`, `go` and `python3` are
+there; `gcloud` only resolves to the Windows one under `/mnt/c/`, which must
+not be used from Linux; there is no SSH key in WSL.
 
-  Everything below is then typed in that folder. The one thing that cannot be
-  tested for free is the first real SSH connection (step 1).
+```bash
+# 1. gcloud CLI for Linux, from Google's apt repository (asks the sudo password).
+#    Commands of the official page "Install the gcloud CLI", Debian/Ubuntu.
+sudo apt-get update
+sudo apt-get install -y ca-certificates gnupg curl
+curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+    | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
+    | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list
+sudo apt-get update && sudo apt-get install -y google-cloud-cli
+
+# 2. The Linux gcloud must now come first
+hash -r
+command -v gcloud          # must print /usr/bin/gcloud, NOT a path under /mnt/c/
+gcloud version             # must print the versions without error
+
+# 3. Log in (the login of the Windows gcloud is not shared with WSL).
+#    Prints a link: open it in the Windows browser, paste the code back.
+gcloud auth login --no-launch-browser
+gcloud config set project cloud-opti-93260
+gcloud auth list           # the right account has the star
+
+# 4. A copy of the repository with Linux line endings (the Windows checkout
+#    has CRLF in the scripts and no executable bit: it cannot be used)
+git clone -c core.autocrlf=false --branch profiling \
+    /mnt/c/Users/Youssef/cloud-optimization ~/cloud-optimization-session
+cd ~/cloud-optimization-session
+file scripts/run_all.sh    # must NOT say "with CRLF line terminators"
+
+# 5. Checks, all free
+./tests/run_tests.sh       # 76 passed (fake gcloud; a timing check sometimes fails: run it again)
+source scripts/gcp_env.sh
+./scripts/cleanup_gcp.sh   # read-only report with the REAL gcloud: "nothing billable left"
+```
+
+Checked on 16/11 without installing anything: Google's key verifies the
+signature of the repository index from this WSL (`gpgv`: good signature), and
+the repository offers `google-cloud-cli` 593.0.0. Step 5 is the proof that the
+login works and that the account can read the project.
+
+Later, to bring new commits of the Windows checkout into the copy:
+`cd ~/cloud-optimization-session && git pull`.
+
+What cannot be tested for free: the first real SSH connection. It is the
+second command of step 1; it creates the SSH key of gcloud in WSL and asks for
+a passphrase: **press Enter twice (no passphrase)**, because the scripts run
+gcloud in the background and cannot type one. If SSH does not work from WSL
+within 10 minutes, go to step 6 and run the session from Thomas's Mac instead.
+
+Everything below is typed in `~/cloud-optimization-session`.
 
 ## 0. Before the session (free, no VM)
 
@@ -106,6 +171,8 @@ TASKS=data/tasks.csv       ./scripts/validate_allocation.sh data/allocation_rr.c
 TASKS=data/tasks.csv       ./scripts/validate_allocation.sh data/allocation_greedy.csv
 TASKS=data/tasks_large.csv ./scripts/validate_allocation.sh data/allocation_rr_large.csv
 TASKS=data/tasks_large.csv ./scripts/validate_allocation.sh data/allocation_greedy_large.csv
+TASKS=data/tasks_gen_s1.csv ./scripts/validate_allocation.sh data/allocation_rr_gen_s1.csv
+TASKS=data/tasks_gen_s1.csv ./scripts/validate_allocation.sh data/allocation_greedy_gen_s1.csv
 ./scripts/validate_allocation.sh data/allocation_profile_e2std2.csv
 # expected: warnings only ("more tasks than vCPUs", memory on cloudopt-vm2
 # for allocation_rr_large.csv), no error
@@ -114,6 +181,7 @@ TASKS=data/tasks_large.csv ./scripts/validate_allocation.sh data/allocation_gree
 go build -o bin/predict_makespan scheduler/makespan.go
 ./bin/predict_makespan data/machines.csv data/model.csv data/allocation_rr.csv data/allocation_greedy.csv
 ./bin/predict_makespan data/machines.csv data/model.csv data/allocation_rr_large.csv data/allocation_greedy_large.csv
+./bin/predict_makespan data/machines.csv data/model.csv data/allocation_rr_gen_s1.csv data/allocation_greedy_gen_s1.csv
 
 export TAG=$(date -u +%Y%m%d)           # names the logs, machine files and runs of this session
 ```
@@ -198,8 +266,26 @@ RUN_ID=${TAG}-27-greedy-1 ./scripts/run_all.sh data/allocation_greedy_large.csv
 RUN_ID=${TAG}-27-greedy-2 ./scripts/run_all.sh data/allocation_greedy_large.csv
 RUN_ID=${TAG}-27-rr-2     ./scripts/run_all.sh data/allocation_rr_large.csv
 for r in results/runs/${TAG}-27-*; do ./scripts/check_results.sh "$r" || echo "CHECK FAILED: $r"; done
+```
+
+## 5b. Round-Robin and greedy, generated lot (18 tasks)
+
+`data/tasks_gen_s1.csv`: 9 `cpu_task`, 4 `memory_task`, 5 `matrix_task`, in a
+random order, with sizes that were never profiled (1.0 to 14.3 s alone). Same
+order of runs. About 1 minute per run.
+
+```bash
+export TASKS=data/tasks_gen_s1.csv
+RUN_ID=${TAG}-gen-rr-1     ./scripts/run_all.sh data/allocation_rr_gen_s1.csv
+RUN_ID=${TAG}-gen-greedy-1 ./scripts/run_all.sh data/allocation_greedy_gen_s1.csv
+RUN_ID=${TAG}-gen-greedy-2 ./scripts/run_all.sh data/allocation_greedy_gen_s1.csv
+RUN_ID=${TAG}-gen-rr-2     ./scripts/run_all.sh data/allocation_rr_gen_s1.csv
+for r in results/runs/${TAG}-gen-*; do ./scripts/check_results.sh "$r" || echo "CHECK FAILED: $r"; done
 unset TASKS
 ```
+
+If the session is late (more than 60 minutes since step 1), this step is the
+one to drop: steps 4 and 5 answer the main question.
 
 A run with a task that is not `OK` is kept and reported; it is not replaced.
 
@@ -217,7 +303,7 @@ each remaining resource before doing anything else.
 
 ## 7. After the session (free)
 
-On controller B, first bring the files back to the Windows checkout:
+First bring the files from the WSL copy back to the Windows checkout:
 
 ```bash
 W=/mnt/c/Users/Youssef/cloud-optimization
@@ -233,6 +319,8 @@ Measured (`busy` is what a VM really took, `makespan` what the user waited):
     results/runs/${TAG}-9-greedy-2 results/runs/${TAG}-9-rr-2
 ./scripts/summarize_run.sh results/runs/${TAG}-27-rr-1 results/runs/${TAG}-27-greedy-1 \
     results/runs/${TAG}-27-greedy-2 results/runs/${TAG}-27-rr-2
+./scripts/summarize_run.sh results/runs/${TAG}-gen-rr-1 results/runs/${TAG}-gen-greedy-1 \
+    results/runs/${TAG}-gen-greedy-2 results/runs/${TAG}-gen-rr-2
 ```
 
 Predicted, for exactly what ran (the copy of the allocation kept by the run):
@@ -242,6 +330,8 @@ Predicted, for exactly what ran (the copy of the allocation kept by the run):
     results/runs/${TAG}-9-rr-1/allocation.csv results/runs/${TAG}-9-greedy-1/allocation.csv
 ./bin/predict_makespan results/runs/${TAG}-27-rr-1/machines.csv data/model.csv \
     results/runs/${TAG}-27-rr-1/allocation.csv results/runs/${TAG}-27-greedy-1/allocation.csv
+./bin/predict_makespan results/runs/${TAG}-gen-rr-1/machines.csv data/model.csv \
+    results/runs/${TAG}-gen-rr-1/allocation.csv results/runs/${TAG}-gen-greedy-1/allocation.csv
 ```
 
 Table to fill, one per task set (`finish` of `predict_makespan` against
@@ -274,9 +364,15 @@ Expected in `data/model.csv`: `sort_task,e2-standard-2` goes from
 `assumed` to `measured`; the memory coefficients `c` and `k` of the three
 `sort_task` rows move slightly (memory is fitted on all machine types
 together); the nine other rows do not change. Checked on 16/11 with made-up
-rows in a copy. `tasks.csv` and `tasks_large.csv` hold no `sort_task`, so the
-four allocations and their predictions do not change; `go test` says so
-(`TestCommittedAllocationIsExactlyTheSchedulerOutput`).
+rows in a copy. None of the three task files holds a `sort_task`, so the six
+allocations and their predictions do not change; `go test` says so for
+`allocation_greedy.csv` (`TestCommittedAllocationIsExactlyTheSchedulerOutput`).
+
+`data/tasks_gen_s1.csv` does not change either, and it is NOT regenerated: it
+is the lot that was run. Its command names the three workloads because, once
+`sort_task` is measured, the generator draws it too by default and the same
+seed then gives another lot (checked on 16/11 in the same copy;
+`tests/test_gen_tasks.py` fails if the file and its command stop matching).
 
 Then: Python and Go tests, `tests/run_tests.sh`, and a commit with the runs,
 the machine files, the logs, the profile and the model.
@@ -289,4 +385,7 @@ the machine files, the logs, the profile and the model.
 - It does not prove that the old `e2-standard-2` measurements (cpu, memory,
   matrix) were made on Broadwell: their `lscpu` was lost. A control within
   10 % on a Broadwell VM makes it likely; `cpu_source` stays `declared`.
+- It does not say that greedy beats Round-Robin on random lots in general:
+  one lot is run. And most random lots cannot be run with Round-Robin on
+  these VMs at all (memory, see the step 4 spec).
 - It does not measure cost.
