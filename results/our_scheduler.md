@@ -182,4 +182,6 @@ runtime = a x size^b, fitted by least squares on log(runtime) and log(size); for
 platform, a speed factor per workload. Validated by leaving one size out at a time. The
 scheduler has a model mode (-model, -platforms) that uses a predicted runtime per VM, with the
 same "longest first" order and the VM of smallest estimated finish time. The table mode
-described above is unchanged.
+described above is unchanged. Measured on 16 November on the same 4 VMs (3 Intel Broadwell, 1
+AMD EPYC 7B13): 50.63 s with the table mode against 15.48 s with the model for 9 tasks, and
+70.93 s against 36.34 s for 27 tasks.

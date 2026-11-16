@@ -55,8 +55,12 @@ For each workload w, from measurements of tasks that ran alone:
 The scheduler keeps the 85 % memory rule with this predicted memory.
 
 These are the only equations. Everyone in the team can compute a prediction by hand. For
-example, with the model trained on our TD1 data, cpu_task 16000000 on the reference platform
-takes 2.083e-10 * 16000000^1.420 = 3.53 s, as measured.
+example, with the model trained after our GCP session of 16 November (reference: Intel
+Broadwell), cpu_task 32000000:
+
+    law on the reference:   1.19e-9 * 32000000^1.415 = 49.7 s
+    on Intel Broadwell:     49.7 * 0.996 = 49.5 s
+    on AMD EPYC 7B13:       49.7 * 0.205 = 10.2 s   (4.9 times faster)
 
 **What the platform is.** We identify a processor by the "Model name" line of lscpu plus its
 family and model numbers, for example `Intel(R) Xeon(R) CPU @ 2.20GHz [6/79]` (Broadwell) or
@@ -108,7 +112,7 @@ source is the run_id of a run, or the name of a benchmark file. A source is adde
 For a run, cpu_model is read from the machine description saved by deploy_all.sh
 (data/machine_<TAG>_<vm>.txt, with TAG the date of the run).
 
-### 4.3 What we have, and what we must collect
+### 4.3 Where the data come from
 
 | Source | Platform | Usable runs (>= 0.5 s) |
 |---|---|---|
@@ -116,8 +120,10 @@ For a run, cpu_model is read from the machine description saved by deploy_all.sh
 | TD2, data/benchmark_cloud_vm1.csv | Intel Broadwell (GCP e2-standard-2) | 4: memory_task 256 (1 run) and 512 (3 runs) |
 | Concurrent runs of results/runs/ | - | 0 (not clean) |
 
-So before the profiling campaign, the model knows the size laws of cpu_task, memory_task and
-matrix_task, one speed factor (Broadwell, memory_task), and nothing about sort_task.
+So before the profiling campaign, the model knew the size laws of cpu_task, memory_task and
+matrix_task, one speed factor (Broadwell, memory_task), and nothing about sort_task. The
+campaign of 16 November added 240 runs (section 8): the training set now has 294 runs, 271 of
+them long enough to be used.
 
 **The profiling campaign** (scripts/profiling_allocation.sh, then MODE=queue run_all.sh) runs
 every workload at 5 sizes, 3 runs each, on every VM:
@@ -133,9 +139,9 @@ The smallest size of each workload lasts at least 0.5 s on our fastest CPU, and 
 data/tasks.csv are included, so the validation checks exactly the sizes we schedule. The order
 on each VM is run 1 of everything, then run 2, then run 3, so a slow period on the host does not
 hit only one size. memory_task 2048 MB fits alone on the 4 GB VM (MODE=queue), and the script
-skips any memory_task size above 85 % of the memory of a VM. That is 60 tasks per VM, about
-12 minutes on a Broadwell VM (9 min of computing plus about 2.5 s of SSH per task) and 5 minutes
-on an AMD VM; the VMs work in parallel.
+skips any memory_task size above 85 % of the memory of a VM. That is 60 tasks per VM. We
+expected about 12 minutes on a Broadwell VM; on 16 November the whole campaign (240 tasks, 4
+VMs in parallel) took 10 min 48 s, and all 240 tasks finished OK.
 
 ## 5. Validation
 
@@ -144,14 +150,15 @@ on an AMD VM; the VMs work in parallel.
 Over a range of sizes, the local slope of N^1.5 / ln N in log-log scale is 1.5 - 1/ln N, and
 that of N log N is 1 + 1/ln N (N: geometric mean of the sizes).
 
-| Workload | Learned b (TD1 data) | Theory | Formula |
-|---|---|---|---|
-| cpu_task | 1.420 | 1.440 | N^1.5 / ln N |
-| memory_task | 0.996 | 1.000 | N |
-| matrix_task | 3.030 | 3.000 | N^3 |
-| sort_task | not measured yet | about 1.06 | N log N |
+| Workload | Learned b (TD1 data only) | Learned b (after the campaign) | Theory | Formula |
+|---|---|---|---|---|
+| cpu_task | 1.420 | 1.415 | 1.439 | N^1.5 / ln N |
+| memory_task | 0.996 | 0.959 | 1.000 | N |
+| matrix_task | 3.030 | 3.073 | 3.000 | N^3 |
+| sort_task | not measured | 1.048 | 1.059 | N log N |
 
-The learned exponents agree with the complexity measured in TD1 within 0.03.
+The learned exponents agree with the complexity of TD1 within 0.08, on two different
+processors (AMD EPYC 7543 with the TD1 data, Intel Broadwell after the campaign).
 
 ### 5.2 Leave-one-size-out
 
@@ -174,21 +181,38 @@ results/ml_validation.csv (summary) and results/ml_validation_detail.csv (one ro
 predicted and measured runtime, which is what we plot). When the smallest or the largest size
 is removed, the model has to extrapolate, so these checks are the hardest ones.
 
-### 5.3 Results with the data we have today (TD1 + TD2)
+### 5.3 Results after the profiling campaign (16 November)
+
+The reference platform is now Intel Broadwell: it has the most runs (3 VMs x 5 sizes x 3 runs).
 
 | Workload | Platform | Factor | Spread | LOSO MAPE | Without factor |
 |---|---|---|---|---|---|
-| cpu_task | AMD EPYC 7543 (reference) | 1.000 | 0.2 % | 0.2 % | 0.2 % |
-| matrix_task | AMD EPYC 7543 (reference) | 0.993 | 2.9 % | 3.2 % | 3.3 % |
-| memory_task | AMD EPYC 7543 (reference) | 0.999 | 3.2 % | 1.6 % | 1.2 % |
-| memory_task | Intel Broadwell | 1.792 | 20.1 % | 13.4 % | 45.8 % |
-| all | | | | 3.8 % (11 checks) | 9.6 % |
+| cpu_task | Intel Broadwell (reference) | 0.996 | 8.4 % | 0.5 % | 0.3 % |
+| cpu_task | AMD EPYC 7543 (Scaleway, TD1) | 0.190 | 0.2 % | 0.4 % | 427.6 % |
+| cpu_task | AMD EPYC 7B13 (GCP n2d) | 0.205 | 0.7 % | 0.4 % | 387.1 % |
+| matrix_task | Intel Broadwell (reference) | 0.992 | 14.8 % | 4.3 % | 3.8 % |
+| matrix_task | AMD EPYC 7543 | 0.628 | 2.9 % | 3.5 % | 59.6 % |
+| matrix_task | AMD EPYC 7B13 | 0.642 | 4.0 % | 2.3 % | 57.5 % |
+| memory_task | Intel Broadwell (reference) | 0.983 | 18.8 % | 4.3 % | 3.8 % |
+| memory_task | AMD EPYC 7543 | 0.608 | 3.2 % | 3.7 % | 60.9 % |
+| memory_task | AMD EPYC 7B13 | 0.692 | 3.3 % | 1.5 % | 43.9 % |
+| sort_task | Intel Broadwell (reference) | 0.992 | 9.2 % | 0.7 % | 0.7 % |
+| sort_task | AMD EPYC 7B13 | 0.737 | 1.2 % | 0.7 % | 35.8 % |
+| **all** | | | | **2.0 % (50 checks)** | **86.2 %** |
 
-The speed factor is what makes the model usable on
-another processor: on Broadwell, the error goes from 45.8 % to 13.4 %, which is close to the
-20 % run-to-run spread of that VM in TD2. These numbers come from only 3 sizes per workload, so
-they are a first check; the profiling campaign gives 5 sizes on every GCP platform. The target
-of the team is a MAPE below 10 to 15 %.
+What these numbers say:
+
+- **The model is accurate:** 2.0 % of error on sizes it has not seen, below the 10 to 15 %
+  target, and below the run-to-run noise of the Broadwell VMs (8 to 19 %).
+- **The speed factor is what makes it work:** without it, the error is 86 %, and 387 % on
+  cpu_task for the AMD EPYC 7B13 (the model would think the AMD is as slow as the Intel).
+- **A processor is not uniformly faster:** the AMD EPYC 7B13 is 4.9 times faster than Broadwell
+  on cpu_task (factor 0.205), but only 1.4 to 1.6 times faster on memory, matrix and sort. This
+  is why there is one factor per processor AND per workload.
+- **The factors are consistent:** the AMD EPYC 7543 (Scaleway, TD1) and the AMD EPYC 7B13 (GCP)
+  are the same generation (Zen 3, family 25 model 1). Measured two months apart, on two
+  providers, their factors differ by less than 15 %.
+- **Memory:** the RSS law has a 1.5 % error, so the 85 % rule works with the predicted memory.
 
 ## 6. Integration with the scheduler
 
@@ -258,25 +282,82 @@ the model better: profile once, retrain, and the next allocations use the new fa
 
 - **Same session, same VMs** for the baseline and the model: the platform can change at each VM
   creation, so runs of different sessions cannot be compared.
-- **VMs:** the three E2 VMs plus cloudopt-vm4, an n2d-standard-2 (always AMD, Rome or Milan),
-  in data/machines_ml.csv. If the E2 VMs land on Intel, the session is heterogeneous for sure.
-  data/machines.csv is not changed.
+- **VMs:** the three E2 VMs plus cloudopt-vm4, an n2d-standard-2 (always AMD), in
+  data/machines_ml.csv. data/machines.csv is not changed.
 - **Baseline:** our scheduler without the model (table mode, data/benchmark_local.csv), on
-  data/tasks.csv and data/tasks_large.csv. Round-Robin is not used anymore.
-- **Model:** the same tasks, model mode after the profiling campaign of the session.
+  data/tasks.csv (9 tasks) and data/tasks_large.csv (27 tasks). Round-Robin is not used anymore.
+- **Model:** the same tasks, model mode, trained after the profiling campaign of the session.
 - **Ablation:** the model with -rule load on the 27 tasks, to separate the effect of the
   predicted runtimes from the effect of the finish-time rule.
-- **Two series** of the five runs, to see the variability between repetitions.
+- **Two series** of the five runs, in the same order, to see the variability between
+  repetitions.
 - **Metrics:** makespan, busy time per VM and cost, with summarize_run.sh; validity with
   check_results.sh; the estimated makespans printed by the scheduler, to measure the prediction
   error of the makespan itself.
-- **Cost estimate:** about 0.40 USD/h for the four VMs (0.375 USD/h of machines, plus external
-  IPs and disks), about 40 minutes: about 0.25 to 0.30 USD.
 
-## 8. Measured results on GCP
+## 8. Measured results on GCP (16 November 2026)
 
-To be completed after the GCP session (makespan of the baseline, of the model and of the
-ablation, per series; MAPE of the model trained on the profiling campaign; platforms obtained).
+### 8.1 The session
+
+| Step | Time (Paris) | Result |
+|---|---|---|
+| vm_create.sh and deploy_all.sh | 18:23 to 18:24 | 4 VMs created and deployed |
+| vm_platforms.sh | | cloudopt-vm1, vm2, vm3 (E2): Intel Broadwell; cloudopt-vm4 (n2d): AMD EPYC 7B13, new for the model |
+| Profiling campaign (MODE=queue) | 18:24:52 to 18:35:40 | 240 tasks, all OK |
+| ml_train.sh | 19:25 | 240 runs added, model retrained (section 5.3) |
+| Comparison runs (2 series of 5) | 19:27:52 to 19:35:18 | 10 runs, all checks passed |
+| cleanup_gcp.sh --delete | after 19:35 | VMs deleted |
+
+The three E2 VMs all got Intel Broadwell: without the n2d-standard-2 the session would have
+been homogeneous, and the model would have had nothing to correct. Run directories:
+results/runs/20261116T*; summary: results/ml_comparison_20261116.txt; plans printed by the
+scheduler: results/base_plan_20261116.txt and results/ml_plan_20261116.txt; training output:
+results/ml_training_20261116.txt.
+
+### 8.2 Makespan: baseline against model
+
+| Scenario | Baseline (table) | Model | Gain |
+|---|---|---|---|
+| 9 tasks, series 1 / 2 | 50.73 s / 50.53 s | 15.28 s / 15.68 s | |
+| 9 tasks, mean | **50.63 s** | **15.48 s** | **-35.15 s (-69 %), 3.3 times faster** |
+| 27 tasks, series 1 / 2 | 71.66 s / 70.19 s | 36.67 s / 36.00 s | |
+| 27 tasks, mean | **70.93 s** | **36.34 s** | **-34.59 s (-49 %), 2.0 times faster** |
+| Cost of a 27-task run (VMs stopped after their last task) | 0.00468 USD | 0.00318 USD | -32 % |
+
+The two series differ by less than 2 %, so the gain is not noise.
+
+**Why the baseline loses.** It believes that cpu_task 32000000 lasts 9.45 s everywhere (its TD1
+measurement on AMD). It put it on cloudopt-vm2 (Intel, 4 vCPUs), where it lasts about 50 s.
+The model knows that it lasts 49.5 s on Intel and 10.2 s on the AMD, and puts it on
+cloudopt-vm4. With 27 tasks, the baseline put the three copies on Intel VMs (two on
+cloudopt-vm2, one on cloudopt-vm1: busy 62 s and 70 s) and left the AMD VM idle after 16 s;
+the model put the three copies on the AMD VM and balanced the four VMs (28 to 36 s each).
+
+### 8.3 Ablation: the model or the rule?
+
+| 27 tasks (mean of 2 series) | Makespan | Change |
+|---|---|---|
+| Baseline: table runtimes, load rule | 70.93 s | |
+| Predicted runtimes, load rule (-rule load) | 54.14 s | -16.79 s (the model) |
+| Predicted runtimes, finish-time rule | 36.34 s | -17.80 s (the rule) |
+
+Both changes count about the same. With the load rule, one copy of cpu_task 32000000 (T21)
+still goes to cloudopt-vm2, the 4-vCPU Intel VM, which is busy 53.6 s: the trap described in
+section 6.2, now measured.
+
+### 8.4 Estimated against measured makespan
+
+| Run | Estimated by the scheduler | Measured | Error |
+|---|---|---|---|
+| Baseline, 9 tasks | 9.45 s | 50.63 s | 5.4 times too optimistic |
+| Model, 9 tasks | 11.33 s | 15.48 s | +37 % |
+| Model, 27 tasks | 18.56 s | 36.34 s | +96 % |
+| Model with -rule load, 27 tasks | 49.50 s | 54.14 s | +9 % |
+
+The baseline is wrong because of the processor. The model predicts each task alone very well
+(2 % of error, section 5.3), but it underestimates a VM that runs many tasks at the same time:
+in the 27-task run, cloudopt-vm4 runs 6 tasks on 2 vCPUs, and the copy T21 of cpu_task
+32000000 took 35.44 s instead of the 10.18 s predicted alone. This is the first limit below.
 
 ## 9. Limits
 
@@ -284,7 +365,9 @@ ablation, per series; MAPE of the model trained on the profiling campaign; platf
   and the scheduler assumes a fair sharing (load = work / vCPUs). It ignores that the two vCPUs
   of an E2 VM are two hyperthreads of one core (two tasks on them are slower than two tasks on
   two cores), and the contention on the memory bandwidth when several memory_task run together.
-  These effects make the measured makespan larger than the estimate.
+  These effects make the measured makespan larger than the estimate: 36.3 s measured against
+  18.6 s estimated for the 27 tasks (section 8.4). A next step would be to count the physical
+  cores of a VM (one core for an e2-standard-2 or an n2d-standard-2) instead of its vCPUs.
 - **One factor per platform and workload** assumes that the ratio between two processors does
   not depend on the size. The leave-one-size-out error per platform tests this assumption; a
   large error on one platform would mean that the factor should depend on the size (cache
@@ -296,12 +379,12 @@ ablation, per series; MAPE of the model trained on the profiling campaign; platf
   by a factor of 4 (the warning says so).
 - **Extrapolation.** A size far outside the measured sizes is a guess. The profiling campaign
   covers the sizes of our task sets, so we do not extrapolate in our experiments.
-- **The model is calibrated in the session.** We profile the VMs of the session before using
-  the model. This is honest for a platform that is new for the model, but the gain shown on GCP
-  is then the gain with a calibrated model. The learning loop makes later sessions on known
-  platforms free of this step.
-- **Memory** is predicted by a power law; for matrix_task it can be about 3 % below the
-  measurement at the largest size. The 85 % limit leaves a much larger margin.
+- **The model is calibrated in the session.** We profiled the VMs of the session before using
+  the model, because the AMD EPYC 7B13 was new for it. The gain shown on GCP is the gain with a
+  calibrated model. Now that Broadwell and the 7B13 are in the training set, a later session on
+  these processors can skip the campaign.
+- **Memory** is predicted by a power law with a 1.5 % mean error (section 5.3). The 85 % limit
+  leaves a much larger margin.
 
 ## 10. Files and commands
 

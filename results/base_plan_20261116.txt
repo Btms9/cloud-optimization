@@ -1,0 +1,14 @@
+Scheduled 9 tasks across 4 VMs: data/allocation_base.csv
+Our allocation (estimates):
+  cloudopt-vm1   2 vCPU    8 GB | T9            | work  8.49s load  4.24s finish  8.49s |    94 MB
+  cloudopt-vm2   4 vCPU    4 GB | T3 T7 T5      | work 11.51s load  2.88s finish  9.45s |  1056 MB
+  cloudopt-vm3   2 vCPU   16 GB | T2 T1 T4      | work  5.36s load  2.68s finish  3.53s |   520 MB
+  cloudopt-vm4   2 vCPU    8 GB | T8 T6         | work  5.53s load  2.77s finish  3.48s |  2107 MB
+Estimated makespan 9.45s, lower bound 9.45s (no allocation can do better)
+Scheduled 27 tasks across 4 VMs: data/allocation_base_large.csv
+Our allocation (estimates):
+  cloudopt-vm1   2 vCPU    8 GB | T12 T20 T6 T24 T5 T13 | work 18.63s load  9.32s finish  9.45s |  5654 MB
+  cloudopt-vm2   4 vCPU    4 GB | T3 T21 T27 T8 T15 T19 T7 T14 | work 36.30s load  9.08s finish  9.45s |  3262 MB
+  cloudopt-vm3   2 vCPU   16 GB | T9 T2 T17 T1 T16 T23 | work 18.87s load  9.43s finish  9.43s |  1207 MB
+  cloudopt-vm4   2 vCPU    8 GB | T18 T11 T26 T10 T25 T4 T22 | work 18.88s load  9.44s finish  9.44s |  1209 MB
+Estimated makespan 9.45s, lower bound 9.45s (no allocation can do better)

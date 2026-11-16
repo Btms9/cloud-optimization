@@ -1,0 +1,5 @@
+vm,machine_type,cpu_model
+cloudopt-vm1,e2-standard-2,Intel(R) Xeon(R) CPU @ 2.20GHz [6/79]
+cloudopt-vm2,e2-highcpu-4,Intel(R) Xeon(R) CPU @ 2.20GHz [6/79]
+cloudopt-vm3,e2-highmem-2,Intel(R) Xeon(R) CPU @ 2.20GHz [6/79]
+cloudopt-vm4,n2d-standard-2,AMD EPYC 7B13 [25/1]

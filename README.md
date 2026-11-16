@@ -722,7 +722,7 @@ per VM. Full explanation, data, validation and limits: `results/ml_model.md`.
 
 - size law per workload, on a reference platform: `runtime = a * size^b`, fitted by least squares
   on `log(runtime) = log(a) + b * log(size)`; the learned b matches the TD1 theory (`cpu_task`
-  1.420 vs 1.44, `memory_task` 0.996 vs 1, `matrix_task` 3.030 vs 3);
+  1.415 vs 1.439, `memory_task` 0.959 vs 1, `matrix_task` 3.073 vs 3, `sort_task` 1.048 vs 1.059);
 - one speed factor per CPU platform and workload: median of measured / predicted, so
   `runtime on p = a * size^b * f_p`;
 - memory: `max_rss_kb = c * size^d`, all platforms together (the 85 % rule is kept).
@@ -733,14 +733,16 @@ alone does not say which CPU an E2 VM gets.
 
 **Data.** Only tasks that ran alone: `benchmark.sh` files and `MODE=queue` runs, never
 concurrent runs. Runs shorter than 0.5 s are ignored. Training set: `data/ml_training.csv`
-(benchmark.sh columns + `machine_type,cpu_model,vm,source`). Today it holds TD1 (AMD EPYC 7543)
-and TD2 (Broadwell); a profiling campaign on GCP adds 5 sizes x 4 workloads x 3 runs per VM.
+(benchmark.sh columns + `machine_type,cpu_model,vm,source`): 294 runs, from TD1 (AMD EPYC 7543),
+TD2 (Broadwell) and the profiling campaign of 16 November (5 sizes x 4 workloads x 3 runs on
+each of the 4 VMs, 240 runs in 10 min 48 s).
 
 **Validation.** Leave-one-size-out: each size is removed, the model is retrained and predicts it.
 MAPE per workload and platform in `results/ml_validation.csv` (details in
-`results/ml_validation_detail.csv`), next to the same model without speed factor. With TD1 + TD2
-data: 3.8 % over 11 checks (9.6 % without factor); on Broadwell memory_task 13.4 % instead of
-45.8 %.
+`results/ml_validation_detail.csv`), next to the same model without speed factor: **2.0 % over
+50 checks, against 86.2 % without the speed factor**. The AMD EPYC 7B13 is 4.9 times faster
+than Broadwell on `cpu_task` but only 1.4 to 1.6 times on the other workloads, hence one factor
+per processor and per workload.
 
 **Scheduler, model mode.** Same algorithm and same 4-column allocation; the old table mode is
 unchanged.
@@ -778,7 +780,20 @@ go test scheduler/lpt_scheduler.go scheduler/lpt_scheduler_test.go
 `tests/run_tests.sh` now has 91 checks (section 13: platforms, profiling in queue mode, training,
 refusal of concurrent runs, model mode end to end, unknown platform).
 
-**Measured on GCP:** to be completed after the session (baseline vs model vs ablation, same VMs).
+**Measured on GCP (16 November 2026), same session, same 4 VMs.** The three E2 VMs got Intel
+Broadwell, `cloudopt-vm4` (n2d-standard-2) an AMD EPYC 7B13. Mean of two series, all runs valid:
+
+| Scenario | Baseline (table) | Model | Gain |
+|---|---|---|---|
+| 9 tasks | 50.63 s | 15.48 s | -69 % (3.3 times faster) |
+| 27 tasks | 70.93 s | 36.34 s | -49 % (2.0 times faster) |
+| 27 tasks, model with `-rule load` (ablation) | | 54.14 s | the model alone gives -24 % |
+
+The baseline put `cpu_task 32000000` (9.45 s in its table) on Intel VMs, where it lasts about
+50 s; the model put it on the AMD VM (10.2 s alone). Half of the gain comes from the predicted
+runtimes, half from the finish-time rule. Limit: the model predicts a task alone, so it
+underestimates a busy VM (18.6 s estimated, 36.3 s measured for the 27 tasks). Details in
+`results/ml_model.md`, section 8.
 
 ## Repository Structure
 

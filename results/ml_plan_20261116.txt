@@ -1,0 +1,93 @@
+Model mode (data/runtime_model.csv, rule finish): runtimes predicted for the CPU platform of each VM
+Predicted runtime alone on each VM, in seconds (* = chosen VM):
+  task   workload          size   cloudopt-vm1   cloudopt-vm2   cloudopt-vm3   cloudopt-vm4
+  T1     cpu_task       8000000          6.96           6.96*          6.96           1.43 
+  T2     cpu_task      16000000         18.56          18.56          18.56           3.82*
+  T3     cpu_task      32000000         49.50          49.50          49.50          10.18*
+  T4     memory_task        512          0.84           0.84           0.84*          0.59 
+  T5     memory_task       1024          1.63           1.63           1.63*          1.15 
+  T6     memory_task       2048          3.17           3.17           3.17*          2.24 
+  T7     matrix_task       1000          1.59           1.59           1.59*          1.03 
+  T8     matrix_task       1500          5.53*          5.53           5.53           3.58 
+  T9     matrix_task       2000         13.38          13.38          13.38           8.67*
+Scheduled 9 tasks across 4 VMs: data/allocation_ml.csv
+Our allocation (estimates):
+  cloudopt-vm1   2 vCPU    8 GB | T8            | work  5.53s load  2.76s finish  5.53s |    55 MB
+  cloudopt-vm2   4 vCPU    4 GB | T1            | work  6.96s load  1.74s finish  6.96s |     2 MB
+  cloudopt-vm3   2 vCPU   16 GB | T6 T5 T7 T4   | work  7.24s load  3.62s finish  3.62s |  3621 MB
+  cloudopt-vm4   2 vCPU    8 GB | T3 T2 T9      | work 22.67s load 11.33s finish 11.33s |    98 MB
+Estimated makespan 11.33s, lower bound 10.18s (no allocation can do better)
+Model mode (data/runtime_model.csv, rule finish): runtimes predicted for the CPU platform of each VM
+Predicted runtime alone on each VM, in seconds (* = chosen VM):
+  task   workload          size   cloudopt-vm1   cloudopt-vm2   cloudopt-vm3   cloudopt-vm4
+  T1     cpu_task       8000000          6.96           6.96           6.96*          1.43 
+  T2     cpu_task      16000000         18.56          18.56          18.56           3.82*
+  T3     cpu_task      32000000         49.50          49.50          49.50          10.18*
+  T4     memory_task        512          0.84*          0.84           0.84           0.59 
+  T5     memory_task       1024          1.63           1.63           1.63           1.15*
+  T6     memory_task       2048          3.17           3.17           3.17*          2.24 
+  T7     matrix_task       1000          1.59           1.59*          1.59           1.03 
+  T8     matrix_task       1500          5.53           5.53*          5.53           3.58 
+  T9     matrix_task       2000         13.38          13.38          13.38*          8.67 
+  T10    cpu_task       8000000          6.96           6.96           6.96           1.43*
+  T11    cpu_task      16000000         18.56          18.56*         18.56           3.82 
+  T12    cpu_task      32000000         49.50          49.50          49.50          10.18*
+  T13    memory_task        512          0.84*          0.84           0.84           0.59 
+  T14    memory_task       1024          1.63           1.63*          1.63           1.15 
+  T15    memory_task       2048          3.17           3.17*          3.17           2.24 
+  T16    matrix_task       1000          1.59           1.59*          1.59           1.03 
+  T17    matrix_task       1500          5.53*          5.53           5.53           3.58 
+  T18    matrix_task       2000         13.38          13.38          13.38*          8.67 
+  T19    cpu_task       8000000          6.96           6.96*          6.96           1.43 
+  T20    cpu_task      16000000         18.56*         18.56          18.56           3.82 
+  T21    cpu_task      32000000         49.50          49.50          49.50          10.18*
+  T22    memory_task        512          0.84*          0.84           0.84           0.59 
+  T23    memory_task       1024          1.63*          1.63           1.63           1.15 
+  T24    memory_task       2048          3.17*          3.17           3.17           2.24 
+  T25    matrix_task       1000          1.59           1.59*          1.59           1.03 
+  T26    matrix_task       1500          5.53           5.53*          5.53           3.58 
+  T27    matrix_task       2000         13.38          13.38*         13.38           8.67 
+Scheduled 27 tasks across 4 VMs: data/allocation_ml_large.csv
+Our allocation (estimates):
+  cloudopt-vm1   2 vCPU    8 GB | T20 T17 T24 T23 T4 T13 T22 | work 31.42s load 15.71s finish 18.56s |  4682 MB
+  cloudopt-vm2   4 vCPU    4 GB | T11 T27 T19 T8 T26 T15 T14 T7 T16 T25 | work 59.54s load 14.88s finish 18.56s |  3365 MB
+  cloudopt-vm3   2 vCPU   16 GB | T9 T18 T1 T6  | work 36.90s load 18.45s finish 18.45s |  2241 MB
+  cloudopt-vm4   2 vCPU    8 GB | T3 T12 T21 T2 T10 T5 | work 36.94s load 18.47s finish 18.47s |  1040 MB
+Estimated makespan 18.56s, lower bound 10.18s (no allocation can do better)
+Model mode (data/runtime_model.csv, rule load): runtimes predicted for the CPU platform of each VM
+Predicted runtime alone on each VM, in seconds (* = chosen VM):
+  task   workload          size   cloudopt-vm1   cloudopt-vm2   cloudopt-vm3   cloudopt-vm4
+  T1     cpu_task       8000000          6.96           6.96           6.96           1.43*
+  T2     cpu_task      16000000         18.56*         18.56          18.56           3.82 
+  T3     cpu_task      32000000         49.50          49.50          49.50          10.18*
+  T4     memory_task        512          0.84*          0.84           0.84           0.59 
+  T5     memory_task       1024          1.63           1.63*          1.63           1.15 
+  T6     memory_task       2048          3.17*          3.17           3.17           2.24 
+  T7     matrix_task       1000          1.59           1.59           1.59           1.03*
+  T8     matrix_task       1500          5.53           5.53           5.53           3.58*
+  T9     matrix_task       2000         13.38          13.38*         13.38           8.67 
+  T10    cpu_task       8000000          6.96           6.96           6.96           1.43*
+  T11    cpu_task      16000000         18.56          18.56          18.56*          3.82 
+  T12    cpu_task      32000000         49.50          49.50          49.50          10.18*
+  T13    memory_task        512          0.84           0.84           0.84*          0.59 
+  T14    memory_task       1024          1.63*          1.63           1.63           1.15 
+  T15    memory_task       2048          3.17           3.17           3.17*          2.24 
+  T16    matrix_task       1000          1.59           1.59*          1.59           1.03 
+  T17    matrix_task       1500          5.53           5.53*          5.53           3.58 
+  T18    matrix_task       2000         13.38*         13.38          13.38           8.67 
+  T19    cpu_task       8000000          6.96           6.96           6.96           1.43*
+  T20    cpu_task      16000000         18.56          18.56          18.56           3.82*
+  T21    cpu_task      32000000         49.50          49.50*         49.50          10.18 
+  T22    memory_task        512          0.84           0.84           0.84           0.59*
+  T23    memory_task       1024          1.63           1.63           1.63*          1.15 
+  T24    memory_task       2048          3.17           3.17*          3.17           2.24 
+  T25    matrix_task       1000          1.59           1.59           1.59           1.03*
+  T26    matrix_task       1500          5.53           5.53           5.53           3.58*
+  T27    matrix_task       2000         13.38          13.38          13.38*          8.67 
+Scheduled 27 tasks across 4 VMs: data/allocation_ml_load_large.csv
+Our allocation (estimates):
+  cloudopt-vm1   2 vCPU    8 GB | T2 T18 T6 T14 T4 | work 37.59s load 18.80s finish 18.80s |  3691 MB
+  cloudopt-vm2   4 vCPU    4 GB | T21 T9 T17 T24 T5 T16 | work 74.81s load 18.70s finish 49.50s |  3256 MB
+  cloudopt-vm3   2 vCPU   16 GB | T11 T27 T15 T23 T13 | work 37.59s load 18.80s finish 18.80s |  3691 MB
+  cloudopt-vm4   2 vCPU    8 GB | T3 T12 T20 T1 T10 T19 T8 T26 T7 T25 T22 | work 38.29s load 19.14s finish 19.14s |   690 MB
+Estimated makespan 49.50s, lower bound 10.18s (no allocation can do better)

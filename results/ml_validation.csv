@@ -1,9 +1,17 @@
 workload,platform,role,speed_factor,b,b_theory,sizes,runs,spread_pct,checks,mape_pct,mape_no_factor_pct,rss_mape_pct
-cpu_task,AMD EPYC 7543 32-Core Processor [25/1],reference,1.000,1.420,1.440,3,9,0.2,3,0.2,0.2,0.7
-cpu_task,ALL,,,,,,,,3,0.2,0.2,0.7
-matrix_task,AMD EPYC 7543 32-Core Processor [25/1],reference,0.993,3.030,3.000,3,9,2.9,3,3.2,3.3,2.5
-matrix_task,ALL,,,,,,,,3,3.2,3.3,2.5
-memory_task,AMD EPYC 7543 32-Core Processor [25/1],reference,0.999,0.996,1.000,3,9,3.2,3,1.6,1.2,0.1
-memory_task,Intel(R) Xeon(R) CPU @ 2.20GHz [6/79],measured,1.792,,,2,4,20.1,2,13.4,45.8,0.1
-memory_task,ALL,,,,,,,,5,6.4,19.0,0.1
-ALL,ALL,,,,,,,,11,3.8,9.6,0.9
+cpu_task,Intel(R) Xeon(R) CPU @ 2.20GHz [6/79],reference,0.996,1.415,1.439,5,45,8.4,5,0.5,0.3,2.6
+cpu_task,AMD EPYC 7543 32-Core Processor [25/1],measured,0.190,,,3,9,0.2,3,0.4,427.6,1.7
+cpu_task,AMD EPYC 7B13 [25/1],measured,0.205,,,5,15,0.7,5,0.4,387.1,2.8
+cpu_task,ALL,,,,,,,,13,0.4,247.7,2.5
+matrix_task,Intel(R) Xeon(R) CPU @ 2.20GHz [6/79],reference,0.992,3.073,3.000,5,45,14.8,5,4.3,3.8,2.2
+matrix_task,AMD EPYC 7543 32-Core Processor [25/1],measured,0.628,,,3,9,2.9,3,3.5,59.6,1.9
+matrix_task,AMD EPYC 7B13 [25/1],measured,0.642,,,5,15,4.0,5,2.3,57.5,2.1
+matrix_task,ALL,,,,,,,,13,3.3,37.3,2.1
+memory_task,Intel(R) Xeon(R) CPU @ 2.20GHz [6/79],reference,0.983,0.959,1.000,6,49,18.8,6,4.3,3.8,0.1
+memory_task,AMD EPYC 7543 32-Core Processor [25/1],measured,0.608,,,3,9,3.2,3,3.7,60.9,0.1
+memory_task,AMD EPYC 7B13 [25/1],measured,0.692,,,5,15,3.3,5,1.5,43.9,0.0
+memory_task,ALL,,,,,,,,14,3.1,30.3,0.0
+sort_task,Intel(R) Xeon(R) CPU @ 2.20GHz [6/79],reference,0.992,1.048,1.059,5,45,9.2,5,0.7,0.7,1.5
+sort_task,AMD EPYC 7B13 [25/1],measured,0.737,,,5,15,1.2,5,0.7,35.8,1.4
+sort_task,ALL,,,,,,,,10,0.7,18.2,1.4
+ALL,ALL,,,,,,,,50,2.0,86.2,1.5

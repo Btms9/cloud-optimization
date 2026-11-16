@@ -1,0 +1,41 @@
+[19:25:18] 20261116T172451Z-allocation_profiling: 240 measurements added
+    cloudopt-vm1   Intel(R) Xeon(R) CPU @ 2.20GHz [6/79]
+    cloudopt-vm2   Intel(R) Xeon(R) CPU @ 2.20GHz [6/79]
+    cloudopt-vm3   Intel(R) Xeon(R) CPU @ 2.20GHz [6/79]
+    cloudopt-vm4   AMD EPYC 7B13 [25/1]
+[19:25:18] training set: data/ml_training.csv (294 measurements)
+Training set data/ml_training.csv: 271 runs used, 23 shorter than 0.50 s ignored
+
+cpu_task: runtime = 1.19e-09 x size^1.415 on Intel(R) Xeon(R) CPU @ 2.20GHz [6/79] (reference)
+  theory N^1.5/ln N: b = 1.439; memory: max RSS = 2073 x size^0.008 kB
+  platform                                factor  spread | checks   MAPE  no factor  memory
+  Intel(R) Xeon(R) CPU @ 2.20GHz [6/79]    0.996    8.4% |      5   0.5%       0.3%    2.6%
+  AMD EPYC 7543 32-Core Processor [25/1]   0.190    0.2% |      3   0.4%     427.6%    1.7%
+  AMD EPYC 7B13 [25/1]                     0.205    0.7% |      5   0.4%     387.1%    2.8%
+  all platforms                                          |     13   0.4%     247.7%    2.5%
+
+matrix_task: runtime = 9.661e-10 x size^3.073 on Intel(R) Xeon(R) CPU @ 2.20GHz [6/79] (reference)
+  theory N^3: b = 3.000; memory: max RSS = 0.07276 x size^1.853 kB
+  platform                                factor  spread | checks   MAPE  no factor  memory
+  Intel(R) Xeon(R) CPU @ 2.20GHz [6/79]    0.992   14.8% |      5   4.3%       3.8%    2.2%
+  AMD EPYC 7543 32-Core Processor [25/1]   0.628    2.9% |      3   3.5%      59.6%    1.9%
+  AMD EPYC 7B13 [25/1]                     0.642    4.0% |      5   2.3%      57.5%    2.1%
+  all platforms                                          |     13   3.3%      37.3%    2.1%
+
+memory_task: runtime = 0.002159 x size^0.959 on Intel(R) Xeon(R) CPU @ 2.20GHz [6/79] (reference)
+  theory N: b = 1.000; memory: max RSS = 1047 x size^0.997 kB
+  platform                                factor  spread | checks   MAPE  no factor  memory
+  Intel(R) Xeon(R) CPU @ 2.20GHz [6/79]    0.983   18.8% |      6   4.3%       3.8%    0.1%
+  AMD EPYC 7543 32-Core Processor [25/1]   0.608    3.2% |      3   3.7%      60.9%    0.1%
+  AMD EPYC 7B13 [25/1]                     0.692    3.3% |      5   1.5%      43.9%    0.0%
+  all platforms                                          |     14   3.1%      30.3%    0.0%
+
+sort_task: runtime = 6.927e-08 x size^1.048 on Intel(R) Xeon(R) CPU @ 2.20GHz [6/79] (reference)
+  theory N log N: b = 1.059; memory: max RSS = 0.01122 x size^0.980 kB
+  platform                               factor  spread | checks   MAPE  no factor  memory
+  Intel(R) Xeon(R) CPU @ 2.20GHz [6/79]   0.992    9.2% |      5   0.7%       0.7%    1.5%
+  AMD EPYC 7B13 [25/1]                    0.737    1.2% |      5   0.7%      35.8%    1.4%
+  all platforms                                         |     10   0.7%      18.2%    1.4%
+
+Leave-one-size-out, all workloads: MAPE 2.0 % over 50 checks (86.2 % without the speed factor)
+Model written to data/runtime_model.csv, validation to results/ml_validation.csv and results/ml_validation_detail.csv

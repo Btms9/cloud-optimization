@@ -1,0 +1,70 @@
+== 20261116T183517Z-allocation_ml_load_large
+  tasks OK: 27 / 27    makespan: 54.26 s
+  cloudopt-vm1   2 vCPU   5 tasks  busy  30.38 s
+  cloudopt-vm2   4 vCPU   6 tasks  busy  53.71 s
+  cloudopt-vm3   2 vCPU   5 tasks  busy  28.96 s
+  cloudopt-vm4   2 vCPU  11 tasks  busy  31.57 s
+  cost (each VM stopped after its last task): 0.00386 USD
+== 20261116T183434Z-allocation_ml_large
+  tasks OK: 27 / 27    makespan: 36.00 s
+  cloudopt-vm1   2 vCPU   7 tasks  busy  29.14 s
+  cloudopt-vm2   4 vCPU  10 tasks  busy  28.19 s
+  cloudopt-vm3   2 vCPU   4 tasks  busy  28.99 s
+  cloudopt-vm4   2 vCPU   6 tasks  busy  35.80 s
+  cost (each VM stopped after its last task): 0.00317 USD
+== 20261116T183319Z-allocation_base_large
+  tasks OK: 27 / 27    makespan: 70.19 s
+  cloudopt-vm1   2 vCPU   6 tasks  busy  66.92 s
+  cloudopt-vm2   4 vCPU   8 tasks  busy  61.70 s
+  cloudopt-vm3   2 vCPU   6 tasks  busy  36.31 s
+  cloudopt-vm4   2 vCPU   7 tasks  busy  15.75 s
+  cost (each VM stopped after its last task): 0.00464 USD
+== 20261116T183259Z-allocation_ml
+  tasks OK: 9 / 9    makespan: 15.68 s
+  cloudopt-vm1   2 vCPU   1 tasks  busy   6.22 s
+  cloudopt-vm2   4 vCPU   1 tasks  busy   6.94 s
+  cloudopt-vm3   2 vCPU   4 tasks  busy   5.90 s
+  cloudopt-vm4   2 vCPU   3 tasks  busy  14.80 s
+  cost (each VM stopped after its last task): 0.00088 USD
+== 20261116T183205Z-allocation_base
+  tasks OK: 9 / 9    makespan: 50.53 s
+  cloudopt-vm1   2 vCPU   1 tasks  busy  14.56 s
+  cloudopt-vm2   4 vCPU   3 tasks  busy  50.36 s
+  cloudopt-vm3   2 vCPU   3 tasks  busy  21.18 s
+  cloudopt-vm4   2 vCPU   2 tasks  busy   4.95 s
+  cost (each VM stopped after its last task): 0.00253 USD
+== 20261116T183105Z-allocation_ml_load_large
+  tasks OK: 27 / 27    makespan: 54.01 s
+  cloudopt-vm1   2 vCPU   5 tasks  busy  30.22 s
+  cloudopt-vm2   4 vCPU   6 tasks  busy  53.55 s
+  cloudopt-vm3   2 vCPU   5 tasks  busy  28.67 s
+  cloudopt-vm4   2 vCPU  11 tasks  busy  31.82 s
+  cost (each VM stopped after its last task): 0.00385 USD
+== 20261116T183022Z-allocation_ml_large
+  tasks OK: 27 / 27    makespan: 36.67 s
+  cloudopt-vm1   2 vCPU   7 tasks  busy  28.80 s
+  cloudopt-vm2   4 vCPU  10 tasks  busy  28.79 s
+  cloudopt-vm3   2 vCPU   4 tasks  busy  29.05 s
+  cloudopt-vm4   2 vCPU   6 tasks  busy  35.83 s
+  cost (each VM stopped after its last task): 0.00319 USD
+== 20261116T182904Z-allocation_base_large
+  tasks OK: 27 / 27    makespan: 71.66 s
+  cloudopt-vm1   2 vCPU   6 tasks  busy  69.81 s
+  cloudopt-vm2   4 vCPU   8 tasks  busy  61.62 s
+  cloudopt-vm3   2 vCPU   6 tasks  busy  36.47 s
+  cloudopt-vm4   2 vCPU   7 tasks  busy  16.25 s
+  cost (each VM stopped after its last task): 0.00472 USD
+== 20261116T182845Z-allocation_ml
+  tasks OK: 9 / 9    makespan: 15.28 s
+  cloudopt-vm1   2 vCPU   1 tasks  busy   5.93 s
+  cloudopt-vm2   4 vCPU   1 tasks  busy   6.98 s
+  cloudopt-vm3   2 vCPU   4 tasks  busy   7.27 s
+  cloudopt-vm4   2 vCPU   3 tasks  busy  15.05 s
+  cost (each VM stopped after its last task): 0.00092 USD
+== 20261116T182750Z-allocation_base
+  tasks OK: 9 / 9    makespan: 50.73 s
+  cloudopt-vm1   2 vCPU   1 tasks  busy  14.44 s
+  cloudopt-vm2   4 vCPU   3 tasks  busy  50.50 s
+  cloudopt-vm3   2 vCPU   3 tasks  busy  22.20 s
+  cloudopt-vm4   2 vCPU   2 tasks  busy   6.09 s
+  cost (each VM stopped after its last task): 0.00259 USD
