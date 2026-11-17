@@ -3,7 +3,7 @@
 Date: 16 November 2026. Status: asked by Youssef on 16/11 ("a random
 tasks.csv generator with a seed, which draws workload and size in the range
 covered by my measurements, with tasks of about 1 to 15 s"). The choices marked
-"our call" were made by Claude and are to be validated by him.
+"our call" are to be validated by Youssef.
 Scope: step 4 only. No scheduler, no orchestrator script and no existing data
 file is touched.
 

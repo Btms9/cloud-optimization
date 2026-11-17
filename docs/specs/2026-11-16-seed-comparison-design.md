@@ -3,8 +3,8 @@
 Date: 16 November 2026. Status: asked by Youssef on 16/11 ("a script that
 compares the predicted makespans of Round-Robin and greedy on 100 seeds,
 locally, and gives the mean, the worst case and the number of times
-Round-Robin exceeds the RAM"). The choices marked "our call" were made by
-Claude and are to be validated by him.
+Round-Robin exceeds the RAM"). The choices marked "our call" are to be
+validated by Youssef.
 Scope: one new script and its tests. No scheduler, no orchestrator script, no
 GCP access; nothing is written in the project.
 

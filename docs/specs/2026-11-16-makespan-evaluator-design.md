@@ -3,7 +3,7 @@
 Date: 16 November 2026. Status: asked by Youssef on 16/11 (a tool that
 computes the predicted makespan of a given allocation, with the same estimator
 as greedy.go, to compare Round-Robin and greedy without GCP). The choices
-marked "our call" were made by Claude and are to be validated by him.
+marked "our call" are to be validated by Youssef.
 Scope: step 3 only. `round_robin.go`, `lpt_scheduler.go`, `greedy.go` and the
 orchestrator are not touched.
 

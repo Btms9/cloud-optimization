@@ -3,8 +3,8 @@
 Prepared on 16 November 2026. **Nothing in this file has been run on GCP.**
 Every command that creates or deletes a resource is marked `[BILLED]` or
 `[DELETES]`; all the others only read or run on the controller.
-To be validated by Youssef before the session; the choices marked "our call"
-were made by Claude.
+To be validated by Youssef before the session, in particular the choices
+marked "our call".
 
 Rehearsed on 16/11 in WSL with the fake gcloud of `tests/mock` (each "VM" is a
 local folder): steps 0 to 4, 6 and 7 ran as written, including the replacement
